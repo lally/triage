@@ -1,0 +1,2 @@
+database:
+  database: triage_test.sqlite3
