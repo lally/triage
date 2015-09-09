@@ -35,6 +35,7 @@ import Network.Wai.Middleware.RequestLogger (Destination (Logger),
 import System.Log.FastLogger                (defaultBufSize, newStdoutLoggerSet,
                                              toLogStr)
 
+import Repo.OrgRepo
 import Git
 import Git.Libgit2
 -- Import all relevant handler modules here.
@@ -74,22 +75,7 @@ makeFoundation appSettings = do
       ref <- resolveReference "refs/heads/master"
       let refName = maybe "(not found)" show ref
       $(logDebug) $ " HEAD shows up as " ++ (pack $ show refName)
-      let getContents :: (MonadGit r m) => TreeFilePath -> TreeEntry r -> m Text
-          getContents name entry = do
-            ty <- case entry of
-              BlobEntry oid kind -> do
-                blob <- lookupBlob oid
-                value <- case (blobContents blob) of
-                  BlobString str -> return $ DTE.decodeUtf8 str
-                  BlobStringLazy str -> return "lazy blobstring"
-                  BlobStream bytestrc -> return "blobstream"
-                  BlobSizedStream bytesrc len -> return "blobstream w/len "
-                return value
-              TreeEntry oid -> do
-                return $ "tree: " `DT.append` (renderObjOid oid)
-              CommitEntry oid -> do
-                return "commit"
-            return $ (DTE.decodeUtf8 name) `DT.append` ": " `DT.append` ty
+      {-
       case ref of
         Just r -> do
           obj <- lookupObject r
@@ -106,7 +92,7 @@ makeFoundation appSettings = do
           return ()
         _ -> do
           return ()
-
+     -}
     -- We need a log function to create a connection pool. We need a connection
     -- pool to create our foundation. And we need our foundation to get a
     -- logging function. To get out of this loop, we initially create a

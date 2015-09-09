@@ -23,6 +23,8 @@ library
                      Handler.Common
                      Handler.Home
                      Handler.DocTree
+                     Repo.OrgRepo
+                     Repo.GitUtils
 
     if flag(dev) || flag(library-only)
         cpp-options:   -DDEVELOPMENT
@@ -86,6 +88,8 @@ library
                  , gitlib
                  , gitlib-libgit2
                  , logging
+                 , orgmode
+                 , tagged
 
 executable         triage
     if flag(library-only)

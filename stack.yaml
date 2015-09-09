@@ -4,5 +4,5 @@ flags:
     dev: false
 packages:
 - '.'
-extra-deps: ['logging-2.2.0']
+extra-deps: ['logging-2.2.0', 'orgmode-0.1.0.0']
 resolver: lts-2.19
