@@ -10,6 +10,12 @@
     stroke: steelblue;
     stroke-width: 1.5px;
   }
+
+  .nodeRect {
+    fill: none;
+    stroke: steelblue;
+    stroke-width: 1.5px;
+  }
    
   .node text {
     font-size:10px; 
@@ -27,8 +33,9 @@
     stroke-width: 3px;
   }
   .ghostCircle.show{
-      display:block;
+      display: block;
   }
-  .ghostCircle, .activeDrag .ghostCircle{
+  .nodeCircle, .activeDrag .ghostCircle{
        display: none;
   }
+

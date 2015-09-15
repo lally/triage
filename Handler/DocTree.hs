@@ -187,9 +187,10 @@ getPathTreeR sha path = do
       setTitle "Foo"
       toWidgetBody $(hamletFile "templates/doctree-body.hamlet")
       toWidgetHead $(hamletFile "templates/doctree-head.hamlet")
-      addScriptRemote "http://code.jquery.com/jquery-1.10.2.min.js"
-      addScriptRemote "http://d3js.org/d3.v3.min.js"
+      addScriptRemote "/static/jquery-1.10.2.min.js"
+      addScriptRemote "/static/d3.v3.min.js"
       toWidget $ $(juliusFile "templates/doctree-body.julius")
+--      addScriptRemote "/static/js-devel/doctree.js"
       addStylesheetRemote "/static/styles/doctree.css"
       {-
       let remotes = [

@@ -13,9 +13,9 @@
  
 .node text {
   font-size:10px; 
-  font-family:sans-serif;
+  font-family: "PragmataPro" sans-serif;
 }
- 
+
 .link {
   fill: none;
   stroke: #ccc;
@@ -32,3 +32,16 @@
 .ghostCircle, .activeDrag .ghostCircle{
      display: none;
 }
+
+.nodeRect {
+    stroke-width: 0.75px;
+}
+
+.directory {
+    fill: lightgreen;
+}
+
+.org {
+    fill: lightblue;
+}
+

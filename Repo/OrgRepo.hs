@@ -8,6 +8,7 @@ import Git
 --import Data.Issue
 
 import Import as P
+import Debug.Trace
 import qualified Data.List as L
 import qualified Data.OrgMode as OM
 import qualified Data.ByteString as BS
@@ -40,7 +41,7 @@ instance ToJSON DocTreePath where
 -- entities, like Issues.  TKSource's arg is a language name, if known.
 -- TODO: May not need this anymre
 data DocTreeKind = TKDir | TKOrgNode | TKText | TKTable | TKSource (Maybe String)
-                 | TKEntity deriving (Eq, Show)
+                 | TKEntity String deriving (Eq, Show)
 
 data DocTreeData = DDText Text
                  | DDTable OM.Table
@@ -56,30 +57,34 @@ data DocTreeEntry = DocTreeEntry
                     { tTitle :: Text
                     , tPath :: DocTreePath
                     , tChildren :: [DocTreeEntry]
+                    , tCompressedEntries :: [(Text, DocTreeKind)]
                     , tData :: [DocTreeData]
+                    , tKind :: DocTreeKind
                     } deriving (Eq, Show)
 
 instance ToJSON DocTreeData where
---  toJSON (DDDir path) = object [ "path" .= (tpack $ show path) ]
-{-  toJSON (DDOrgNode node) = object $ [
-    "tags" .= OM.nTags node,
-    "topic" .= OM.nTopic node
-    ] ++ maybe [] (\(OM.Prefix s) -> ["prefix" .= s]) (OM.nPrefix node) -}
   toJSON (DDText text) = String text
   toJSON (DDTable table) = object []
   toJSON (DDSource babel) = object []
   toJSON (DDIssue text) = object []
 
-instance ToJSON DocTreeEntry where
-  toJSON (DocTreeEntry title path children dat) = object
-                                                  [ "name" .= title
-                                                  , "path" .= path
-                                                  , "value" .= toJSON dat
-                                                  , "children" .= toJSON children
-                                                  ]
+instance ToJSON DocTreeKind where
+  toJSON TKDir = String "directory"
+  toJSON TKOrgNode = String "org"
+  toJSON TKText = String "text"
+  toJSON TKTable = String "table"
+  toJSON (TKSource (Nothing)) = String "src"
+  toJSON (TKSource (Just s)) = String ("src-" ++ (T.pack s))
+  toJSON (TKEntity ty) = String (T.pack ty)
 
-  --data DocTreeEntity = DDEIssue Issue deriving (Eq, Show)
-  -- doctree/SHA/FilePath#LineNumber
+instance ToJSON DocTreeEntry where
+  toJSON ent = object
+               [ "name" .= tTitle ent
+               , "path" .= tPath ent
+               , "value" .= tData ent
+               , "children" .= tChildren ent
+               , "kind" .= tKind ent
+               ]
 
 getContents :: (MonadGit r m) => TreeFilePath -> TreeEntry r -> m T.Text
 getContents name entry = do
@@ -153,7 +158,9 @@ empty _ = False
 
 nodeChildren :: [OM.NodeChild] -> ([OM.Node], [DocTreeData])
 nodeChildren children =
-  let isNode (OM.ChildNode n) = Just n
+  let isNode (OM.ChildNode n)
+        | OM.nTopic n == "ISSUE EVENTS" = Nothing
+        | otherwise = Just n
       isNode _ = Nothing
       nodeString (OM.ChildNode n) = Nothing
       nodeString (OM.ChildText ln) =
@@ -170,7 +177,7 @@ makeDocEntry parent node =
       path = DocTreePath (pRevisionHash parent) (pFilePath parent) line
       (rawnodes, dat) = nodeChildren (OM.nChildren node)
   in DocTreeEntry (T.pack $ OM.nTopic node) path (
-    map (makeDocEntry path) rawnodes) dat
+    map (makeDocEntry path) rawnodes) [] dat TKOrgNode
 
 convertDoc :: [Text] -> DocTreePath -> OM.OrgDoc -> DocTreeEntry
 convertDoc path parent doc =
@@ -181,39 +188,68 @@ convertDoc path parent doc =
           [OM.OrgFileProperty n v] -> T.pack v
           otherwise -> L.last path
   in DocTreeEntry title (DocTreePath sha path Nothing) (
-    map (makeDocEntry parent) (OM.odNodes doc)) []
+    map (makeDocEntry parent) (OM.odNodes doc)) [] [] TKOrgNode
 
 updateTree' :: Int -> DocTreeEntry -> [Text] -> OM.OrgDoc -> DocTreeEntry
-updateTree' n ent@(DocTreeEntry _ p c d) path doc =
+updateTree' n ent@(DocTreeEntry _ p c _ d k) path doc =
   let premain = drop n path
   in if empty premain
      then ent { tChildren = (convertDoc path p doc):c }
      else let matchingChild cld =
                 let fp = drop n $ pFilePath $ tPath cld
-                in L.head fp == L.head path
-              pfx :: [DocTreeEntry]
+                in L.head fp == L.head premain
+              intNodeName = if (T.length $ L.head premain) > 0
+                            then L.head premain
+                            else L.head $ dropWhile (\n -> T.length n < 1) $ reverse path
+              {-pfx :: [DocTreeEntry]
               cld :: DocTreeEntry
-              sfx :: [DocTreeEntry]
-              (pfx, cld, sfx) = case L.findIndex matchingChild c of
-                (Just i) -> let (f, hd) = splitAt i c
-                                repl = updateTree' (n+1) (L.head hd) path doc
-                            in (f, repl, drop (i+1) c)
-                Nothing -> -- create intermediate node
-                  let intNode = DocTreeEntry {
-                        tTitle = L.head premain,
-                        tPath = DocTreePath {
-                          pRevisionHash = pRevisionHash p,
-                          pFilePath = pFilePath p ++ [L.head premain],
-                          pLineNumber = Nothing },
-                        tChildren = [],
-                        tData = []
-                        }
-                  in (c, updateTree' (n+1) intNode path doc, [])
+              sfx :: [DocTreeEntry]-}
+              (pfx, cld, sfx) =
+                case L.findIndex matchingChild c of
+                     (Just i) -> let (f, hd) = splitAt i c
+                                     repl = updateTree' (n+1) (L.head hd) path doc
+                                 in (f, repl, drop (i+1) c)
+                     Nothing -> -- create intermediate node
+                       let intNode = DocTreeEntry {
+                             tTitle = (L.head $ drop n path),
+                             tPath = DocTreePath {
+                               pRevisionHash = pRevisionHash p,
+                               pFilePath = pFilePath p ++ [L.head premain],
+                               pLineNumber = Nothing },
+                             tChildren = [],
+                             tCompressedEntries = [],
+                             tData = [],
+                             tKind = TKDir }
+                       in (c, updateTree' (n+1) intNode path doc, [])
           in ent { tChildren = pfx ++ (cld:sfx) }
 
 updateTree :: DocTreeEntry -> ([Text], OM.OrgDoc) -> DocTreeEntry
-updateTree ent@(DocTreeEntry _ p c d) (path, doc) =
+updateTree ent (path, doc) =
   updateTree' 0 ent path doc
+
+-- | Returns either a merged entry, or Nothing if they can't be merged. 
+mergeEntries :: DocTreeEntry -> DocTreeEntry -> DocTreeEntry
+mergeEntries parent child =
+  let pathelem = case tKind parent of
+        TKDir -> L.last $ pFilePath $ tPath $ parent
+        TKOrgNode -> tTitle parent
+      title = if T.null (tTitle child) then tTitle parent else tTitle child
+  in child { tCompressedEntries =
+                (pathelem, tKind parent):(tCompressedEntries parent),
+             tTitle = title}
+
+-- Finds entries with just 1 child and:
+--  (a) combines the parent and child
+--  (b) recurses on the result
+compressTree :: DocTreeEntry -> DocTreeEntry
+compressTree input =
+  case tChildren input of
+    [] -> input
+    -- TODO: match a 1-element list and merge
+    [child] -> compressTree (mergeEntries input child)
+    otherwise -> input {
+      tChildren = map compressTree (tChildren input) }
+
 
 loadRepoTree :: (MonadGit r m) => Commit r -> m DocTreeEntry
 loadRepoTree commit = do
@@ -225,7 +261,7 @@ loadRepoTree commit = do
       makePath (path, doc) = (T.split (=='/')$ TE.decodeUtf8 path, doc)
         -- (T.split (=='/') path, doc)
   -- get SHA of commit
-  let root = DocTreeEntry sha (DocTreePath sha [] Nothing) [] []
+  let root = DocTreeEntry sha (DocTreePath sha [] Nothing) [] [] [] TKDir
       finalTree = foldl' updateTree root $ map makePath contents
       -- err: contents is [(TreeFilePath, OM.OrgDoc)], not [(Text,...)]
-  return finalTree
+  return $ compressTree finalTree
