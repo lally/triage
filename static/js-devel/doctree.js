@@ -1,5 +1,6 @@
 // Get JSON data
-treeJSON = d3.json("@{XhrPathTreeR sha path}",
+treeJSON = d3.json(
+  "http://localhost:2000/xhrtree/6297d72b1957739454b3a6a192c17d6fae642fb1",
   function(error, treeData) {
     // Calculate total nodes, max label length
     var totalNodes = 0;
@@ -48,9 +49,11 @@ treeJSON = d3.json("@{XhrPathTreeR sha path}",
         }
     }
 
-    // Call visit to close nodes with many children.
+    // Call visit to close nodes with many children, or nodes that are DONE or CLOSED
     visit(treeData, function(d) {
-        if (d.children && d.children.length > 16) {
+        if (d.children && d.children.length > 16
+           || d.state == "DONE" || d.state == "CLOSED"
+           || d.tags.indexOf("ARCHIVE") >= 0 || d.tags.indexOf("IGNORE") >= 0) {
             collapse(d);
         }
     }, function(d) {
@@ -324,8 +327,8 @@ treeJSON = d3.json("@{XhrPathTreeR sha path}",
         link.exit().remove();
     };
 
-    // Function to center node when clicked/dropped so node doesn't get lost when collapsing/moving with large amount of children.
-
+    // Function to center node when clicked/dropped so node doesn't
+    // get lost when collapsing/moving with large amount of children.
     function centerNode(source) {
         scale = zoomListener.scale();
         x = -source.y0;
@@ -339,8 +342,20 @@ treeJSON = d3.json("@{XhrPathTreeR sha path}",
         zoomListener.translate([x, y]);
     }
 
-    // Toggle children function
+    // Function to move node to vertical center of left side.
+    function leftCenterNode(source) {
+        scale = zoomListener.scale();
+        console.log("leftCenterNode: scale=" + JSON.stringify (scale) + ", source.0s=[" + source.x0 + ", " + source.y0 + "]");
+        y = viewerHeight / 2;
+        x = 0;
+        d3.select('g').transition()
+            .duration(duration)
+            .attr("transform", "translate(" + y + "," + x + ")scale(" + scale + ")");
+        zoomListener.scale(scale);
+        zoomListener.translate([y, x]);
+    }
 
+    // Toggle children function
     function toggleChildren(d) {
         if (d.children) {
             d._children = d.children;
@@ -728,5 +743,6 @@ treeJSON = d3.json("@{XhrPathTreeR sha path}",
 
     // Layout the tree initially and center on the root node.
     update(root);
-    centerNode(root);
+    leftCenterNode(root);
 });
+

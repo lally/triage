@@ -83,13 +83,14 @@ renderNode (ChildBabel (Babel lines) ) n = do
 renderNode child n = do [hamlet| |]
 
 --
--- |Get child references, up to 'max', of 'commit'
+-- |Get child references, up to 'max', of 'commit'.  Each is a pair (sha, msg)
 --
-refChildren :: (MonadGit r m) => Int -> Commit r -> m [String]
+refChildren :: (MonadGit r m) => Int -> Commit r -> m [(String, String)]
 refChildren max commit = do
   parents <- lookupCommitParents commit
   children <- mapM (refChildren (max-1)) parents
-  return $ take max $ (T.unpack $ renderObjOid $ commitOid commit):(concat children)
+  let current = (T.unpack $ renderObjOid $ commitOid commit, T.unpack $ commitLog commit)
+  return $ take max $ current:(concat children)
 refChildren 0 commit = return []
 
 --
@@ -189,8 +190,9 @@ getPathTreeR sha path = do
       toWidgetHead $(hamletFile "templates/doctree-head.hamlet")
       addScriptRemote "/static/jquery-1.10.2.min.js"
       addScriptRemote "/static/d3.v3.min.js"
-      toWidget $ $(juliusFile "templates/doctree-body.julius")
---      addScriptRemote "/static/js-devel/doctree.js"
+--      toWidget $ $(juliusFile "templates/doctree-body.julius")
+      addScriptRemote "/static/js-devel/doctree.js"
+--      addScriptRemote "/static/text_object.js"
       addStylesheetRemote "/static/styles/doctree.css"
       {-
       let remotes = [

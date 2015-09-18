@@ -5,12 +5,13 @@ import Data.Tagged
 import Git
 -- TODO: split out Issues from org-issue-sync for inclusion here.
 -- OR, just make org-issue-sync a dependency.
---import Data.Issue
-
 import Import as P
 import Debug.Trace
 import qualified Data.List as L
 import qualified Data.OrgMode as OM
+import qualified Data.Issue as DI
+import qualified Data.OrgIssue as DOI
+import qualified Data.IssueJSON as IJ
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Char8 as BS8
@@ -27,7 +28,8 @@ data DocTreePath = DocTreePath
                      -- ^ a SHA1
                    , pFilePath :: [Text]
                    , pLineNumber :: Maybe Int
-                     -- ^ |Just n| if this is an entry in a file. Nothing if a dir.
+                     -- ^ |Just n| if this is an entry in a
+                     -- file. Nothing if a dir.
                    } deriving (Eq, Show)
 
 instance ToJSON DocTreePath where
@@ -46,8 +48,22 @@ data DocTreeKind = TKDir | TKOrgNode | TKText | TKTable | TKSource (Maybe String
 data DocTreeData = DDText Text
                  | DDTable OM.Table
                  | DDSource OM.Babel
-                 | DDIssue Text -- ^ a placeholder.
+                 | DDIssue DI.Issue -- ^ a placeholder.
                  deriving (Eq, Show)
+
+data DocTreeEntity = DTIssue DI.Issue
+                     | DTOrg OM.Node
+                     deriving (Eq, Show)
+
+instance OM.NodeUpdate DocTreeEntity where
+  -- findItemInNode :: OM.Node -> Maybe DocTreeEntity
+  findItemInNode n =
+    let asIssue = DTIssue <$> OM.findItemInNode n
+    in if isJust asIssue then asIssue else (Just $ DTOrg n)
+
+  -- updateNodeLine :: DocTreeEntity -> OM.Node -> Maybe OM.Node
+  updateNodeLine (DTIssue i) n = OM.updateNodeLine i n
+  updateNodeLine (DTOrg o) n = Just n
 
 -- |A graph node.  Data in 'tData' will go into the expanded card of
 -- this node.  Children will show up as suboordinate nodes.  This
@@ -60,6 +76,9 @@ data DocTreeEntry = DocTreeEntry
                     , tCompressedEntries :: [(Text, DocTreeKind)]
                     , tData :: [DocTreeData]
                     , tKind :: DocTreeKind
+                    , tTags :: [Text]
+                    , tState :: Maybe Text
+                    , tEntity :: Maybe DocTreeEntity
                     } deriving (Eq, Show)
 
 instance ToJSON DocTreeData where
@@ -78,13 +97,18 @@ instance ToJSON DocTreeKind where
   toJSON (TKEntity ty) = String (T.pack ty)
 
 instance ToJSON DocTreeEntry where
-  toJSON ent = object
+  toJSON ent = object (
                [ "name" .= tTitle ent
                , "path" .= tPath ent
                , "value" .= tData ent
                , "children" .= tChildren ent
                , "kind" .= tKind ent
-               ]
+               , "tags" .= tTags ent
+               , "state" .= maybe "OPEN" id (tState ent)
+               ] ++ maybe [] (\v -> [("value", toJSON v)]) (tEntity ent))
+
+instance ToJSON DocTreeEntity where
+  toJSON (DTIssue iss) = toJSON iss
 
 getContents :: (MonadGit r m) => TreeFilePath -> TreeEntry r -> m T.Text
 getContents name entry = do
@@ -158,6 +182,8 @@ empty _ = False
 
 nodeChildren :: [OM.NodeChild] -> ([OM.Node], [DocTreeData])
 nodeChildren children =
+      -- Note that this is a hack here, and should get killed off once
+      -- we properly have OrgIssue recognition.
   let isNode (OM.ChildNode n)
         | OM.nTopic n == "ISSUE EVENTS" = Nothing
         | otherwise = Just n
@@ -176,8 +202,17 @@ makeDocEntry parent node =
   let line = OM.tlLineNum $ OM.nLine node
       path = DocTreePath (pRevisionHash parent) (pFilePath parent) line
       (rawnodes, dat) = nodeChildren (OM.nChildren node)
-  in DocTreeEntry (T.pack $ OM.nTopic node) path (
-    map (makeDocEntry path) rawnodes) [] dat TKOrgNode
+      prefixText = fmap (\(OM.Prefix s) -> T.pack s) $ OM.nPrefix node
+      getStatusText (DI.Open) = "OPEN"
+      getStatusText (DI.Active) = "ACTIVE"
+      getStatusText (DI.Closed) = "CLOSED"
+      statusText iss = Just (getStatusText $ DI.status iss)
+  in case OM.findItemInNode node of
+    (Just (DTIssue iss)) -> DocTreeEntry (T.pack $ DI.summary iss) path [] [] [] (
+      TKEntity "issue") (map T.pack $ DI.tags iss) (statusText iss) (Just $ DTIssue iss)
+    otherwise -> DocTreeEntry (T.pack $ OM.nTopic node) path (
+      map (makeDocEntry path) rawnodes) [] dat TKOrgNode (
+      map T.pack $ OM.nTags node) prefixText Nothing
 
 convertDoc :: [Text] -> DocTreePath -> OM.OrgDoc -> DocTreeEntry
 convertDoc path parent doc =
@@ -188,26 +223,29 @@ convertDoc path parent doc =
           [OM.OrgFileProperty n v] -> T.pack v
           otherwise -> L.last path
   in DocTreeEntry title (DocTreePath sha path Nothing) (
-    map (makeDocEntry parent) (OM.odNodes doc)) [] [] TKOrgNode
+    map (makeDocEntry parent) (OM.odNodes doc)) [] [] TKOrgNode [] Nothing Nothing
 
 updateTree' :: Int -> DocTreeEntry -> [Text] -> OM.OrgDoc -> DocTreeEntry
-updateTree' n ent@(DocTreeEntry _ p c _ d k) path doc =
-  let premain = drop n path
+updateTree' n ent path doc =
+  let p = tPath ent
+      c = tChildren ent
+      d = tData ent
+      k = tKind ent
+      premain = drop n path
   in if empty premain
      then ent { tChildren = (convertDoc path p doc):c }
      else let matchingChild cld =
                 let fp = drop n $ pFilePath $ tPath cld
                 in L.head fp == L.head premain
-              intNodeName = if (T.length $ L.head premain) > 0
-                            then L.head premain
-                            else L.head $ dropWhile (\n -> T.length n < 1) $ reverse path
-              {-pfx :: [DocTreeEntry]
-              cld :: DocTreeEntry
-              sfx :: [DocTreeEntry]-}
+              intNodeName =
+                if (T.length $ L.head premain) > 0
+                then L.head premain
+                else L.head $ dropWhile (\n -> T.length n < 1) $ reverse path
               (pfx, cld, sfx) =
                 case L.findIndex matchingChild c of
                      (Just i) -> let (f, hd) = splitAt i c
-                                     repl = updateTree' (n+1) (L.head hd) path doc
+                                     repl = (updateTree' (n+1) (L.head hd)
+                                             path doc)
                                  in (f, repl, drop (i+1) c)
                      Nothing -> -- create intermediate node
                        let intNode = DocTreeEntry {
@@ -219,7 +257,11 @@ updateTree' n ent@(DocTreeEntry _ p c _ d k) path doc =
                              tChildren = [],
                              tCompressedEntries = [],
                              tData = [],
-                             tKind = TKDir }
+                             tKind = TKDir,
+                             tTags = [],
+                             tEntity = Nothing,
+                             tState = Nothing
+                             }
                        in (c, updateTree' (n+1) intNode path doc, [])
           in ent { tChildren = pfx ++ (cld:sfx) }
 
@@ -261,7 +303,8 @@ loadRepoTree commit = do
       makePath (path, doc) = (T.split (=='/')$ TE.decodeUtf8 path, doc)
         -- (T.split (=='/') path, doc)
   -- get SHA of commit
-  let root = DocTreeEntry sha (DocTreePath sha [] Nothing) [] [] [] TKDir
+  let root = (DocTreeEntry sha (DocTreePath sha [] Nothing) [] [] [] TKDir []
+              Nothing Nothing)
       finalTree = foldl' updateTree root $ map makePath contents
       -- err: contents is [(TreeFilePath, OM.OrgDoc)], not [(Text,...)]
   return $ compressTree finalTree

@@ -90,6 +90,7 @@ library
                  , logging
                  , orgmode
                  , tagged
+                 , org-issue-sync
 
 executable         triage
     if flag(library-only)

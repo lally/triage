@@ -4,5 +4,7 @@ flags:
     dev: false
 packages:
 - '.'
-extra-deps: ['logging-2.2.0', 'orgmode-0.1.0.0']
+- ../orgmode
+- ../org-issue-sync
+extra-deps: ['logging-2.2.0', 'orgmode-0.1.0.1', 'github-0.13.2', 'google-oauth2-0.2.0', 'failure-0.2.0.3']
 resolver: lts-2.19

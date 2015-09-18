@@ -1,36 +1,36 @@
 .node {
-  cursor: pointer;
+    cursor: pointer;
 }
 .overlay{
     background-color:#EEE;
 }
- 
+
 .node circle {
-  fill: #fff;
-  stroke: steelblue;
-  stroke-width: 1.5px;
+    fill: #fff;
+    stroke: steelblue;
+    stroke-width: 1.5px;
 }
- 
+
 .node text {
-  font-size:10px; 
-  font-family: "PragmataPro" sans-serif;
+    font-family: "PT Sans Narrow" sans-serif;
+    font-weight: 700;
 }
 
 .link {
-  fill: none;
-  stroke: #ccc;
-  stroke-width: 1.5px;
+    fill: none;
+    stroke: #ccc;
+    stroke-width: 1.5px;
 }
 .templink {
-  fill: none;
-  stroke: red;
-  stroke-width: 3px;
+    fill: none;
+    stroke: red;
+    stroke-width: 3px;
 }
 .ghostCircle.show{
     display:block;
 }
 .ghostCircle, .activeDrag .ghostCircle{
-     display: none;
+    display: none;
 }
 
 .nodeRect {
@@ -45,3 +45,143 @@
     fill: lightblue;
 }
 
+.leftcard {
+    width: 95%;
+    margin-bottom: 16px;
+}
+/*
+.leftcard .header.paper-card .title-text.paper-card {
+    font-family: "PT Sans Narrow" monospace;
+    font-stretch: ultra-condensed;
+    font-size: 15px;
+}*/
+
+
+text.ticketText {
+    font-family: "PT Sans Narrow" sans-serif;
+    font-size: 7px;
+}
+
+text.ticketTag {
+    font-family: "PT Sans Narrow" sans-serif;
+    font-size: 5px;
+}
+
+text.issueOrigin {
+    font-family: "PT Sans Narrow" sans-serif;
+    font-size: 5px;
+    fill: #929292;
+}
+
+text.issueOrigin.P1 {
+    fill: #DECBCB;
+}
+
+text.issueOrigin.P2 {
+    fill: white;
+}
+
+rect.ticketTag {
+    fill: #9dc56e;
+    stroke-width: 0.25px;
+    stroke: black;
+}
+
+path.ticketBox {
+    fill: #f3f3f3;
+    fill-opacity:1;
+    stroke:#000000;
+    stroke-width:0.75;
+    stroke-linejoin:round;
+    stroke-miterlimit:4;
+    stroke-opacity:1;
+    stroke-dasharray:none;
+}
+
+path.ticketLine {
+    fill:none;
+    stroke:#000000;
+    stroke-width:0.69696611px;
+    stroke-linecap:butt;
+    stroke-linejoin:miter;
+    stroke-opacity:1;
+}
+
+path.P1 {
+    fill: #446e9b;
+}
+
+rect.state.OPEN {
+    display: none;
+}
+
+text.state.OPEN {
+    display: none;
+}
+
+rect.state.TODO {
+    fill: #ff6e40;
+}
+
+rect.state.DONE, rect.state.CLOSED {
+    fill: #9dc56e;
+}
+
+rect.dueDate {
+    rx: 8px;
+    ry: 8px;
+    fill: red;
+    height: 12px;
+}
+text.dueDate {
+    font-size: x-small;
+    font-weight: bolder;
+    fill: white;
+}
+rect.state.ACTIVE {
+    fill: #ffb74d;
+}
+
+text.state.ACTIVE {
+    font-size: 7px;
+}
+
+text.state.CLOSED {
+    font-size: 7px;
+}
+
+text.state {
+    font-size: 8px;
+}
+
+text.ticketText.P1 {
+    fill: white;
+}
+
+path.P2 {
+    fill: #80cbc4;
+}
+
+node .green {
+    fill: #9dc56e;
+}
+
+node .orange {
+    fill: #ffb74d;
+}
+
+node .yellow {
+    fill: #fadd60;
+}
+
+node .red {
+    fill: #ff6e40;
+}
+
+node .grey {
+    fill: #afb1b9;
+}
+
+node .lightgrey {
+    fill: #f3f3f3;
+}

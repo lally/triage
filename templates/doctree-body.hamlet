@@ -1,25 +1,16 @@
-<paper-drawer-panel responsive-width="800px">
-  <paper-header-panel drawer>
+<paper-drawer-panel responsive-width="100%">
+  <paper-header-panel drawer class="leftpanel">
     <paper-toolbar class="has-shadow vertical layout">
       <div id="topBar" class="flex">
         <h4>Git Repos
-    <div>
-      $forall child <- children
-        <paper-card>
-          <div class="padding: 3px">#{take 16 $ child} 
-  <paper-scroll-header-panel main class="flex">
+    <div class="leftcol">
+      $forall (sha, log) <- children
+        <paper-card heading=#{take 16 $ sha} class="leftcard">
+          <div class="card-content">#{take 500 $ log}
+
+  <paper-scroll-header-panel main class="flex mainbody">
     <paper-toolbar class="has-shadow">
       <paper-icon-button icon="menu" paper-drawer-toggle>
-      <div><h4><span style="font-color: lightred">#{shaAbbrev}</span><b>:</b>#{fullPath}
+      <span class="title">#{shaAbbrev}:#{fullPath}
     <div>
-      <p>HEAD hash is #{sha}
-      <p>Request hash was for #{sha}, and path was for #{fullPath}. #{line}
       <div id="tree-container">
-      <!--
-      <ol>
-        $forall (path, doc) <- docs
-          <li><tt>#{path}</tt> with #{length $ concatMap nChildren $ odNodes doc} nodes:
-            <ol>
-              $forall node <- concatMap nChildren $ odNodes doc
-                ^{renderNode node 4}
-      -->
