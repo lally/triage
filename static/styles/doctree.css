@@ -54,8 +54,29 @@
     font-family: "PT Sans Narrow" monospace;
     font-stretch: ultra-condensed;
     font-size: 15px;
-}*/
+}
+        // TODO: move this into a CLASS tag.
+            .style("stroke", function(d) {
+                if (d._children && d._children != null) {
+                    return "yellow";
+                } else if (d.children && d.children != null) {
+                    return "red"
+                } else {  // no children, or they're visible.
+                    return "black";
+                }
+            });
+*/
+.childrenClosed {
+    stroke: blue;
+}
 
+.childrenExpanded {
+    stroke: gray;
+}
+
+.noChildren {
+    .stroke: black;
+}
 
 text.ticketText {
     font-family: "PT Sans Narrow" sans-serif;

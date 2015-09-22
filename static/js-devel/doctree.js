@@ -2,6 +2,188 @@ var updateSeqNo = 1;
 var updateEpsilon = 0.0000000001;
 
 var treeRoot;
+var prioRegex = /P[0-9]/;
+var dateRegex = /<(\d+)-(\d+)-(\d+)[^>]*>:?/
+var childHeight = 24;
+var childWidth = 225;
+var slotHeight = 75;
+
+function makeNodeSvg(d,i) {
+    var enter = d3.select(this);
+    var prio = '';
+    // Pull out P1,P2,P3 and make them classes
+    for (var i = 0; i < d.tags.length; i++) {
+        if (prioRegex.test(d.tags[i])) {
+            prio = d.tags[i];
+            d.tags.splice(i, 1);
+        }
+    }
+
+    // Pull out any date/time stamps in there.
+    var dateMatch = dateRegex.exec(d.name);
+    if (dateMatch == null) {
+        if (d["date"] === undefined)
+            d.date = null;
+    } else {
+        d.date = (dateMatch[2]/ 1) + "/" + (dateMatch[3]) + "/" +
+            (dateMatch[1] - 2000);
+        var oldname = d.name;
+        d.name = d.name.split(dateMatch[0]).join("");
+    }
+
+    var clipRgn;
+    var xoff = 0;
+    var childrenClassification = null;
+    if (d.children && d.children.length > 0) {
+        childrenClassification = "childrenExpanded";
+    } else if (d._children && d._children.length > 0) {
+        childrenClassification = "childrenClosed";
+    } else {
+        childrenClassification = "noChildren";
+    }
+    if (d.kind == "directory") {
+        xoff = 8;
+        enter.append("rect")
+            .attr('class', function(d) {
+                return (d.kind ? 'nodeRect ' + d.kind : 'nodeRect') + ' ' +
+                    prio + ' ' + childrenClassification;
+            })
+            .attr("width", childWidth)
+            .attr("height", childHeight)
+            .attr("rx", 2).attr("ry", 2)
+            .attr("x", -(childWidth / 2))
+            .attr("y", -(childHeight / 2));
+        clipRgn = enter.append("g")
+            .attr("transform", "translate(" + -(childWidth / 2) + ",0)");
+        clipRgn.append("g")
+            .attr("clip-path", "url(#nodeClip)")
+          .append("text")
+            .attr("x", "12")
+            .attr("dy", ".35em")
+            .attr('class', 'nodeText ' + prio)
+            .attr("value",  d.name )
+            .style("fill-opacity", 0);
+    } else if (d.kind == "org") { // org
+        xoff = 12;
+        enter.append("rect")
+            .attr('class', function(d) {
+                return (d.kind ? 'nodeRect ' + d.kind : 'nodeRect') + ' ' + 
+                    prio + ' ' + childrenClassification
+            })
+            .attr("width", childWidth)
+            .attr("height", childHeight)
+            .attr("rx", 4).attr("ry", childHeight / 2)
+            .attr("x", -(childWidth / 2))
+            .attr("y", -(childHeight / 2));
+        clipRgn = enter.append("g")
+            .attr("transform", "translate(" + -(childWidth / 2) + ",0)");
+        clipRgn.append("g")
+            .attr("clip-path", "url(#nodeClip)")
+          .append("text")
+            .attr("x", "16")
+            .attr("dy", ".35em")
+            .attr('class', 'nodeText ' + prio)
+            .attr("value", d.name )
+            .style("fill-opacity", 0);
+
+    } else { // issue?
+        xoff=12;
+        var box = enter.append("g")
+                    .attr("transform",
+                          "translate(-"+(childWidth/2)+",-1040)");
+        box.append("path")
+          .attr("class", 'ticketBox ' + prio + ' ' + childrenClassification)
+            .attr("d","m 4.1745156,1028.3331 c -0.9932588,0.8752 -2.4937368,1.5954 -4.28771162,2.0836 l 0,20.2272 c 1.74209712,0.4738 3.20153382,1.1815 4.19382012,2.0227 l 141.7448559,0 c 0.99365,-0.8756 2.49279,-1.5954 4.28772,-2.0835 l 0,-20.1817 c -1.79172,-0.4847 -3.25888,-1.1977 -4.25642,-2.0683 l -141.6822644,0 z")
+          .attr("transform", "scale(1.5,1)");
+
+        clipRgn = enter.append("g")
+            .attr("transform", "translate(" + -(childWidth / 2) + ",0)");
+
+        var clippedRgn = clipRgn.append("g")
+            .attr("clip-path", "url(#nodeClip)");
+        clippedRgn.append("text")
+            .attr("x", 16)
+            .attr("dy", ".35em")
+            .attr('class', 'ticketText ' + prio)
+            .text( d.name )
+            .style("fill-opacity", 0);
+
+        // Put an origin/num identifier up top.
+        clippedRgn.append("text")
+            .attr("class", "issueOrigin " + prio)
+            .attr("text-anchor", "end")
+            .attr("x", -childWidth + 8)
+            .attr("y", -7)
+            .text(d.value.type + ":" + d.value.origin + "#" + d.value.number);
+
+    }
+    // Put any Open/TODO tags on the left.
+    if (d.state.length > 0) {
+        var box = clipRgn.append("g").attr("transform",
+                                           "translate(" + xoff + ",25)");
+        box.append("rect")
+            .attr("class", "state " + d.state)
+            .attr("x", "-8")
+            .attr("y", "-36")
+            .attr("width","10px")
+            .attr("height", "22px")
+            .style("fill: red");
+
+        box.append("text")
+            .attr("transform","matrix(0,-1,1,0,0,0)")
+            .attr("class", "state " + d.state)
+            .attr("x", "16px")
+            .attr("y", 0)
+            .text(d.state);
+    }
+    // Put a date annotation on the box.
+    if (d.date != null) {
+        var box = clipRgn.append("g").attr("transform",
+                                           "translate(" + xoff + ", 0)");
+        box.append("rect")
+            .attr("class", "dueDate")
+            .attr("x", "-12")
+            .attr("y", "-20")
+            .attr("width","40");
+
+        box.append("text")
+            .attr("class", "dueDate")
+            .attr("x", "-8")
+            .attr("y", "-10")
+            .text(d.date);
+    }
+
+    // Put tags on the bottom.
+    var prev_offset = 4;
+    for (var i in d.tags) {
+        if (prev_offset < childWidth) {
+            var lastGrp = clipRgn.append("g");
+            var lastRect = lastGrp.append("rect")
+                .attr("class", "ticketTag")
+                .attr("height", "6px")
+                .attr("x", "-1px")
+                .attr("y", "-6px");
+
+            var last = lastGrp.append("text")
+                .attr("class", "ticketTag " + d.tags[i])
+                .attr("y", "-1px")
+                .text(d.tags[i]);
+
+            var cur_width = last.node().getBBox().width + 2;
+            var cur_offset = prev_offset + cur_width;
+            lastRect.attr("width", cur_width);
+            lastGrp.attr("transform", "translate(" +
+                         (childWidth - cur_offset) + "," +
+                         childHeight/2 + ")");
+            if (childWidth - cur_offset < 0) {
+                last.attr("style", "display: none");
+                lastRect.attr("style", "display: none");
+            }
+            prev_offset += cur_width + 1;
+        }
+    }
+
+}
 
 function extractPath(url) {
     if (url == null) return 0;
@@ -40,7 +222,6 @@ function compareNodes(a, b) {
 function comparePaths(a, b) {
     if (a.split("#")[1].length < 1 &&
         b.split("#")[1].length < 1) {
-        console.log("- doing full path comparison");
         return a < b;
     }
     var apathElems = a.split("#")[1].split(",");
@@ -122,9 +303,6 @@ function setupTree(error, treeData) {
     var i = 0;
     var duration = 750;
     var root;
-    var childHeight = 24;
-    var childWidth = 225;
-    var slotHeight = 75;
 
     // size of the diagram
     var viewerWidth = $(document).width();
@@ -136,10 +314,13 @@ function setupTree(error, treeData) {
     treeRoot = treeData;
 
     // define a d3 diagonal projection for use by the node paths later on.
+    // This still arcs them the wrong way.
     var diagonal = d3.svg.diagonal()
-        .projection(function(d) {
-            return [d.y, d.x];
-        });
+            .source(function(d) { return {"x":d.source.x,// + (childWidth /2),
+                                          "y":d.source.y + (childWidth / 2)}; })
+            .target(function(d) { return {"x":d.target.x, // - (childWidth / 2),
+                                          "y":d.target.y - (childWidth /2)}; })
+            .projection(function(d) { return [d.y, d.x]; });
 
     // Save the original path here.
     visit(treeData, function(d, num) {
@@ -173,7 +354,6 @@ function setupTree(error, treeData) {
 
 
     // sort the tree according to the node names
-
     function sortSubtree(subtree) {
         visit(subtree, function(d) {
             if (d.children) {
@@ -183,6 +363,7 @@ function setupTree(error, treeData) {
             return d.children && d.children.length > 0 ? d.children : null;
         });
     }
+
     function sortTree() {
         sortSubtree(treeData);
     }
@@ -386,7 +567,6 @@ function setupTree(error, treeData) {
     }
 
     // Helper functions for collapsing and expanding nodes.
-
     function collapse(d) {
         if (d.children) {
             d._children = d.children;
@@ -480,6 +660,7 @@ function setupTree(error, treeData) {
         } else if (d._children) {
             d.children = d._children;
             d._children = null;
+            sortSubtree(d);
         }
         return d;
     }
@@ -493,9 +674,6 @@ function setupTree(error, treeData) {
         centerNode(d);
     }
 
-    var prioRegex = /P[0-9]/;
-    var dateRegex = /<(\d+)-(\d+)-(\d+)[^>]*>:?/
-
     function update(source) {
         // Compute the new height, function counts total children of
         // root node and sets tree height accordingly.  This prevents
@@ -504,7 +682,6 @@ function setupTree(error, treeData) {
         // layout more consistent.
         var levelWidth = [1];
         var childCount = function(level, n) {
-
             if (n.children && n.children.length > 0) {
                 if (levelWidth.length <= level + 1) levelWidth.push(0);
 
@@ -518,6 +695,11 @@ function setupTree(error, treeData) {
         var newHeight = d3.max(levelWidth) * slotHeight;
         tree = tree.size([newHeight, viewerWidth]);
 
+        // TODO: update the 'class' attr of 'source' in terms of
+        // childrenClassification.  Probably just pull out the logic of
+        // determining the node's class attr into a funciton and invoke it
+        // here.
+
         // Compute the new tree layout.
         var nodes = tree.nodes(root).reverse(),
             links = tree.links(nodes);
@@ -529,7 +711,6 @@ function setupTree(error, treeData) {
             // Normalize for fixed-depth by commenting out below line
             d.y = (d.depth * (1.5 * childWidth)); //500px per level.
         });
-
 
         // Update the nodes…
         node = svgGroup.selectAll("g.node")
@@ -549,192 +730,7 @@ function setupTree(error, treeData) {
         // TODO(lally): The selection object here will be 'this' in
         // either call() or each() (I think the latter).  Look at the
         // type inolved and format it differently.
-        nodeEnter.each(function(d,i) {
-            var enter = d3.select(this);
-            var prio = '';
-            // Pull out P1,P2,P3 and make them classes
-            for (var i = 0; i < d.tags.length; i++) {
-                if (prioRegex.test(d.tags[i])) {
-                    prio = d.tags[i];
-                    d.tags.splice(i, 1);
-                }
-            }
-
-            // Pull out any date/time stamps in there.
-            var dateMatch = dateRegex.exec(d.name);
-            if (dateMatch == null) {
-                if (d["date"] === undefined)
-                    d.date = null;
-            } else {
-                d.date = (dateMatch[2]/ 1) + "/" + (dateMatch[3]) + "/" +
-                    (dateMatch[1] - 2000);
-                var oldname = d.name;
-                d.name = d.name.split(dateMatch[0]).join("");
-            }
-
-            var clipRgn;
-            var xoff = 0;
-            if (d.kind == "directory") {
-                xoff = 8;
-                enter.append("rect")
-                    .attr('class', function(d) {
-                        return (d.kind ? 'nodeRect ' + d.kind : 'nodeRect') + ' ' + prio
-                    })
-                    .attr("width", childWidth)
-                    .attr("height", childHeight)
-                    .attr("rx", 2).attr("ry", 2)
-                    .attr("x", -(childWidth / 2))
-                    .attr("y", -(childHeight / 2))
-                // TODO: move this into a CLASS tag.
-                    .style("stroke", function(d) {
-                        if (d._children && d._children != null) {
-                            return "yellow";
-                        } else if (d.children && d.children != null) {
-                            return "red"
-                        } else {  // no children, or they're visible.
-                            return "black";
-                        }
-                    });
-                clipRgn = enter.append("g")
-                    .attr("transform", "translate(" + -(childWidth / 2) + ",0)");
-                clipRgn.append("g")
-                    .attr("clip-path", "url(#nodeClip)")
-                  .append("text")
-                    .attr("x", "12")
-                    .attr("dy", ".35em")
-                    .attr('class', 'nodeText ' + prio)
-                    .attr("value",  d.name )
-                    .style("fill-opacity", 0);
-            } else if (d.kind == "org") { // org
-                xoff = 12;
-                enter.append("rect")
-                    .attr('class', function(d) {
-                        return (d.kind ? 'nodeRect ' + d.kind : 'nodeRect') + ' ' + prio
-                    })
-                    .attr("width", childWidth)
-                    .attr("height", childHeight)
-                    .attr("rx", 4).attr("ry", childHeight / 2)
-                    .attr("x", -(childWidth / 2))
-                    .attr("y", -(childHeight / 2))
-                // TODO: move this into a CLASS tag.
-                    .style("stroke", function(d) {
-                        if (d._children && d._children != null) {
-                            return "lightsteelblue";
-                        } else if (d.children && d.children != null) {
-                            return "red"
-                        } else {  // no children, or they're visible.
-                            return "black";
-                        }
-                    });
-                clipRgn = enter.append("g")
-                    .attr("transform", "translate(" + -(childWidth / 2) + ",0)");
-                clipRgn.append("g")
-                    .attr("clip-path", "url(#nodeClip)")
-                  .append("text")
-                    .attr("x", "16")
-                    .attr("dy", ".35em")
-                    .attr('class', 'nodeText ' + prio)
-                    .attr("value", d.name )
-                    .style("fill-opacity", 0);
-
-            } else { // issue?
-                xoff=12;
-                var box = enter.append("g")
-                            .attr("transform",
-                                  "translate(-"+(childWidth/2)+",-1040)");
-                box.append("path")
-                  .attr("class", 'ticketBox ' + prio)
-                    .attr("d","m 4.1745156,1028.3331 c -0.9932588,0.8752 -2.4937368,1.5954 -4.28771162,2.0836 l 0,20.2272 c 1.74209712,0.4738 3.20153382,1.1815 4.19382012,2.0227 l 141.7448559,0 c 0.99365,-0.8756 2.49279,-1.5954 4.28772,-2.0835 l 0,-20.1817 c -1.79172,-0.4847 -3.25888,-1.1977 -4.25642,-2.0683 l -141.6822644,0 z")
-                  .attr("transform", "scale(1.5,1)");
-
-                clipRgn = enter.append("g")
-                    .attr("transform", "translate(" + -(childWidth / 2) + ",0)");
-
-                var clippedRgn = clipRgn.append("g")
-                    .attr("clip-path", "url(#nodeClip)");
-                clippedRgn.append("text")
-                    .attr("x", 16)
-                    .attr("dy", ".35em")
-                    .attr('class', 'ticketText ' + prio)
-                    .text( d.name )
-                    .style("fill-opacity", 0);
-
-                // Put an origin/num identifier up top.
-                clippedRgn.append("text")
-                    .attr("class", "issueOrigin " + prio)
-                    .attr("text-anchor", "end")
-                    .attr("x", -childWidth + 8)
-                    .attr("y", -7)
-                    .text(d.value.type + ":" + d.value.origin + "#" + d.value.number);
-
-            }
-            // Put any Open/TODO tags on the left.
-            if (d.state.length > 0) {
-                var box = clipRgn.append("g").attr("transform",
-                                                   "translate(" + xoff + ",25)");
-                box.append("rect")
-                    .attr("class", "state " + d.state)
-                    .attr("x", "-8")
-                    .attr("y", "-36")
-                    .attr("width","10px")
-                    .attr("height", "22px")
-                    .style("fill: red");
-
-                box.append("text")
-                    .attr("transform","matrix(0,-1,1,0,0,0)")
-                    .attr("class", "state " + d.state)
-                    .attr("x", "16px")
-                    .attr("y", 0)
-                    .text(d.state);
-            }
-            // Put a date annotation on the box.
-            if (d.date != null) {
-                var box = clipRgn.append("g").attr("transform",
-                                                   "translate(" + xoff + ", 0)");
-                box.append("rect")
-                    .attr("class", "dueDate")
-                    .attr("x", "-12")
-                    .attr("y", "-20")
-                    .attr("width","40");
-
-                box.append("text")
-                    .attr("class", "dueDate")
-                    .attr("x", "-8")
-                    .attr("y", "-10")
-                    .text(d.date);
-            }
-
-            // Put tags on the bottom.
-            var prev_offset = 4;
-            for (var i in d.tags) {
-                if (prev_offset < childWidth) {
-                    var lastGrp = clipRgn.append("g");
-                    var lastRect = lastGrp.append("rect")
-                        .attr("class", "ticketTag")
-                        .attr("height", "6px")
-                        .attr("x", "-1px")
-                        .attr("y", "-6px");
-
-                    var last = lastGrp.append("text")
-                        .attr("class", "ticketTag " + d.tags[i])
-                        .attr("y", "-1px")
-                        .text(d.tags[i]);
-
-                    var cur_width = last.node().getBBox().width + 2;
-                    var cur_offset = prev_offset + cur_width;
-                    lastRect.attr("width", cur_width);
-                    lastGrp.attr("transform", "translate(" +
-                                 (childWidth - cur_offset) + "," +
-                                 childHeight/2 + ")");
-                    if (childWidth - cur_offset < 0) {
-                        last.attr("style", "display: none");
-                        lastRect.attr("style", "display: none");
-                    }
-                    prev_offset += cur_width + 1;
-                }
-            }
-
-        });
+        nodeEnter.each(makeNodeSvg);
 
         // Set widths between levels based on maxLabelLength.
         nodes.forEach(function(d) {
@@ -761,12 +757,9 @@ function setupTree(error, treeData) {
 
         // Update the text to reflect whether node has children or not.
         node.select('text')
-/*            .attr("x", function(d) {
-                return 10; // d.children || d._children ? -10 : 10;
-            }) */
             .text(function(d) {
                 return d.name;
-            }); 
+            });
 
         // Change the circle fill depending on whether it has children and is collapsed
         node.select("circle.nodeCircle")
@@ -798,7 +791,7 @@ function setupTree(error, treeData) {
             .attr("r", 0);
 
         nodeExit.select("rect")
-//            .attr("width", 0)
+            .attr("width", 0)
             .attr("height", 0);
 
         nodeExit.select("text")
@@ -810,12 +803,13 @@ function setupTree(error, treeData) {
                 return d.target.id;
             });
 
+
         // Enter any new links at the parent's previous position.
         link.enter().insert("path", "g")
             .attr("class", "link")
             .attr("d", function(d) {
                 var o = {
-                    x: source.x0 - (childWidth / 2),
+                    x: source.x0,
                     y: source.y0
                 };
                 return diagonal({
@@ -823,6 +817,7 @@ function setupTree(error, treeData) {
                     target: o
                 });
             });
+
 
         // Transition links to their new position.
         link.transition()

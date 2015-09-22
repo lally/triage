@@ -1,4 +1,4 @@
-<paper-drawer-panel responsive-width="100%">
+<paper-drawer-panel responsive-width="500px">
   <paper-header-panel drawer class="leftpanel">
     <paper-toolbar class="has-shadow vertical layout">
       <div id="topBar" class="flex">
