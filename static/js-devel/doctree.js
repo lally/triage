@@ -1,7 +1,114 @@
-// Get JSON data
-treeJSON = d3.json(
-  "http://localhost:2000/xhrtree/6297d72b1957739454b3a6a192c17d6fae642fb1",
-  function(error, treeData) {
+var updateSeqNo = 1;
+var updateEpsilon = 0.0000000001;
+
+var treeRoot;
+
+function extractPath(url) {
+    if (url == null) return 0;
+    var afterHash = url.split("#");
+    if (afterHash.length > 1 && afterHash[1].length > 0) {
+        var pathElems = afterhash[1].split(",");
+        if (pathElems[pathElems.length-1].length > 0) {
+            return parseInt(pathElems[pathElems.length-1]);
+        }
+    }
+    return 0;
+}
+
+function prefixPath(url) {
+    if (url == null) return 0;
+    var afterHash = url.split("#");
+    if (afterHash.length > 1 && afterHash[1].length > 0) {
+        var pathElems = afterhash[1].split(",");
+        if (pathElems[pathElems.length-1].length > 0) {
+            pathElems = pathElems.splice(pathElems.length -1,1);
+        }
+        return afterHash + "#" + pathElems.join(",");
+    }
+    return url;
+}
+
+function nextEpsilon() {
+    updateSeqNo++;
+    return updateSeqNo * updateEpsilon;
+}
+
+function compareNodes(a, b) {
+    return comparePaths(a.path, b.path);
+}
+
+function comparePaths(a, b) {
+    if (a.split("#")[1].length < 1 &&
+        b.split("#")[1].length < 1) {
+        console.log("- doing full path comparison");
+        return a < b;
+    }
+    var apathElems = a.split("#")[1].split(",");
+    var bpathElems = b.split("#")[1].split(",");
+    for (var i = 0; i < apathElems.length; i++) {
+        if (apathElems[i] != bpathElems[i]) {
+            var result = parseInt(apathElems[i]) < parseInt(bpathElems[i]);
+            return result;
+        }
+    }
+    return false;
+}
+
+function addChildBetween(prev, next) {
+    var prev_nr = extractPath(prev);
+    var next_nr = extractPath(next);
+    var midpoint = (prev_nr + next_nr) / 2 + nextEpsilon();
+    var prefix;
+    if (prev == null) {
+        prefix = prefixPath(next);
+    } else if (next == null) {
+        prefix = prefixPath(prev);
+    } else if (prefixPath(prev) != prefixPath(next)) {
+        throw ("Invalid prefix paths! ["+prev+"] vs ["+next+"]");
+    }
+    return prefix + "," + midpoint;
+}
+
+function addChildAfter(parent) {
+    if (parent.children || parent._children) {
+        throw ("Node has children, yet calling addChildAfter!");
+    }
+    return parent.path + "," + nextEpsilon();
+}
+
+// A recursive helper function for performing some setup by
+// walking through all nodes
+function visit(parent, visitFn, childrenFn, num) {
+    if (num === undefined) {
+        num = 1;
+    }
+
+    if (!parent) return;
+
+    visitFn(parent, num);
+
+    var children = childrenFn(parent, num);
+    if (children) {
+        var count = children.length;
+        for (var i = 0; i < count; i++) {
+            visit(children[i], visitFn, childrenFn, num+1);
+        }
+    }
+}
+
+function getDeltas() {
+    var resultList = []
+    visit(treeRoot, function(d) {
+        if (d.startPath != d.path) {
+            resultList.push([d.startPath, d.path]);
+        }},
+          function(d) {
+              return d.children && d.children.length > 0 ? d.children : null;
+          });
+}
+
+// Processes JSON data for the graph.
+function setupTree(error, treeData) {
     // Calculate total nodes, max label length
     var totalNodes = 0;
     var maxLabelLength = 0;
@@ -16,8 +123,8 @@ treeJSON = d3.json(
     var duration = 750;
     var root;
     var childHeight = 24;
-    var childWidth = 150;
-    var slotHeight = 50;
+    var childWidth = 225;
+    var slotHeight = 75;
 
     // size of the diagram
     var viewerWidth = $(document).width();
@@ -26,34 +133,30 @@ treeJSON = d3.json(
     var tree = d3.layout.tree()
         .size([viewerHeight, viewerWidth]);
 
+    treeRoot = treeData;
+
     // define a d3 diagonal projection for use by the node paths later on.
     var diagonal = d3.svg.diagonal()
         .projection(function(d) {
             return [d.y, d.x];
         });
 
-    // A recursive helper function for performing some setup by
-    // walking through all nodes
+    // Save the original path here.
+    visit(treeData, function(d, num) {
+        d.startPath = d.path;
+        d.depth = num;
+    }, function(d) {
+        return d.children && d.children.length > 0 ? d.children : null;
+    });
 
-    function visit(parent, visitFn, childrenFn) {
-        if (!parent) return;
-
-        visitFn(parent);
-
-        var children = childrenFn(parent);
-        if (children) {
-            var count = children.length;
-            for (var i = 0; i < count; i++) {
-                visit(children[i], visitFn, childrenFn);
-            }
-        }
-    }
-
-    // Call visit to close nodes with many children, or nodes that are DONE or CLOSED
-    visit(treeData, function(d) {
-        if (d.children && d.children.length > 16
-           || d.state == "DONE" || d.state == "CLOSED"
-           || d.tags.indexOf("ARCHIVE") >= 0 || d.tags.indexOf("IGNORE") >= 0) {
+    // Call visit to close nodes with many children, or nodes that are
+    // DONE or CLOSED
+    visit(treeData, function(d, n) {
+        if (( n >= 4 && d.children && d.children.length > 6)
+            || (n > 2 && d.children && d.children.length > 16)
+            || d.state == "DONE" || d.state == "CLOSED"
+            || d.tags.indexOf("ARCHIVE") >= 0 || d.tags.indexOf("IGNORE") >= 0
+            || n > 6) {
             collapse(d);
         }
     }, function(d) {
@@ -64,7 +167,6 @@ treeJSON = d3.json(
     visit(treeData, function(d) {
         totalNodes++;
         maxLabelLength = Math.max(d.name.length, maxLabelLength);
-
     }, function(d) {
         return d.children && d.children.length > 0 ? d.children : null;
     });
@@ -72,13 +174,21 @@ treeJSON = d3.json(
 
     // sort the tree according to the node names
 
-    function sortTree() {
-        tree.sort(function(a, b) {
-            return b.name.toLowerCase() < a.name.toLowerCase() ? 1 : -1;
+    function sortSubtree(subtree) {
+        visit(subtree, function(d) {
+            if (d.children) {
+                d.children.sort(compareNodes);
+            }
+        }, function(d) {
+            return d.children && d.children.length > 0 ? d.children : null;
         });
     }
+    function sortTree() {
+        sortSubtree(treeData);
+    }
+
     // Sort the tree initially incase the JSON isn't in a sorted order.
-    // sortTree();
+    sortTree();
 
     // TODO: Pan function, can be better implemented.
 
@@ -125,8 +235,10 @@ treeJSON = d3.json(
         d3.selectAll('.ghostCircle').attr('class', 'ghostCircle show');
         d3.select(domNode).attr('class', 'node activeDrag');
 
-        svgGroup.selectAll("g.node").sort(function(a, b) { // select the parent and sort the path's
-            if (a.id != draggingNode.id) return 1; // a is not the hovered element, send "a" to the back
+        // select the parent and sort the path's
+        svgGroup.selectAll("g.node").sort(function(a, b) {
+            // a is not the hovered element, send "a" to the back
+            if (a.id != draggingNode.id) return 1;
             else return -1; // a is the hovered element, bring "a" to the front
         });
         // if nodes has children, remove the links and nodes
@@ -249,7 +361,8 @@ treeJSON = d3.json(
                     selectedNode.children = [];
                     selectedNode.children.push(draggingNode);
                 }
-                // Make sure that the node being added to is expanded so user can see added node is correctly moved
+                // Make sure that the node being added to is expanded so user
+                // can see added node is correctly moved
                 expand(selectedNode);
                 sortTree();
                 endDrag();
@@ -285,6 +398,7 @@ treeJSON = d3.json(
     function expand(d) {
         if (d._children) {
             d.children = d._children;
+            sortSubtree(d);
             d.children.forEach(expand);
             d._children = null;
         }
@@ -303,7 +417,8 @@ treeJSON = d3.json(
     var updateTempConnector = function() {
         var data = [];
         if (draggingNode !== null && selectedNode !== null) {
-            // have to flip the source coordinates since we did this for the existing connectors on the original tree
+            // have to flip the source coordinates since we did this for the
+            // existing connectors on the original tree
             data = [{
                 source: {
                     x: selectedNode.y0,
@@ -345,14 +460,16 @@ treeJSON = d3.json(
     // Function to move node to vertical center of left side.
     function leftCenterNode(source) {
         scale = zoomListener.scale();
-        console.log("leftCenterNode: scale=" + JSON.stringify (scale) + ", source.0s=[" + source.x0 + ", " + source.y0 + "]");
-        y = viewerHeight / 2;
-        x = 0;
+        console.log("leftCenterNode: scale=" + JSON.stringify (scale) + 
+                    ", source.0s=[" + source.x0 + ", " + source.y0 + "]");
+        y = (-source.x0 * scale) + viewerHeight / 2;
+        x = (-source.y0 * scale) + childWidth / 2 + 20; //  + viewerWidth / 2;
         d3.select('g').transition()
             .duration(duration)
-            .attr("transform", "translate(" + y + "," + x + ")scale(" + scale + ")");
+            .attr("transform", "translate(" + x + "," + y + ")scale(" + scale + ")");
+        console.log("leftCenterNode: translate("+x+","+y+"), scale("+scale+")");
         zoomListener.scale(scale);
-        zoomListener.translate([y, x]);
+        zoomListener.translate([x, y]);
     }
 
     // Toggle children function
@@ -526,8 +643,9 @@ treeJSON = d3.json(
                             .attr("transform",
                                   "translate(-"+(childWidth/2)+",-1040)");
                 box.append("path")
-                .attr("class", 'ticketBox ' + prio)
-                    .attr("d","m 4.1745156,1028.3331 c -0.9932588,0.8752 -2.4937368,1.5954 -4.28771162,2.0836 l 0,20.2272 c 1.74209712,0.4738 3.20153382,1.1815 4.19382012,2.0227 l 141.7448559,0 c 0.99365,-0.8756 2.49279,-1.5954 4.28772,-2.0835 l 0,-20.1817 c -1.79172,-0.4847 -3.25888,-1.1977 -4.25642,-2.0683 l -141.6822644,0 z");
+                  .attr("class", 'ticketBox ' + prio)
+                    .attr("d","m 4.1745156,1028.3331 c -0.9932588,0.8752 -2.4937368,1.5954 -4.28771162,2.0836 l 0,20.2272 c 1.74209712,0.4738 3.20153382,1.1815 4.19382012,2.0227 l 141.7448559,0 c 0.99365,-0.8756 2.49279,-1.5954 4.28772,-2.0835 l 0,-20.1817 c -1.79172,-0.4847 -3.25888,-1.1977 -4.25642,-2.0683 l -141.6822644,0 z")
+                  .attr("transform", "scale(1.5,1)");
 
                 clipRgn = enter.append("g")
                     .attr("transform", "translate(" + -(childWidth / 2) + ",0)");
@@ -545,7 +663,7 @@ treeJSON = d3.json(
                 clippedRgn.append("text")
                     .attr("class", "issueOrigin " + prio)
                     .attr("text-anchor", "end")
-                    .attr("x", 142)
+                    .attr("x", -childWidth + 8)
                     .attr("y", -7)
                     .text(d.value.type + ":" + d.value.origin + "#" + d.value.number);
 
@@ -744,5 +862,5 @@ treeJSON = d3.json(
     // Layout the tree initially and center on the root node.
     update(root);
     leftCenterNode(root);
-});
+};
 

@@ -186,14 +186,14 @@ getPathTreeR sha path = do
     --      Yesod, but nothing for this type of inclusion.
   defaultLayout $ do
       setTitle "Foo"
-      toWidgetBody $(hamletFile "templates/doctree-body.hamlet")
-      toWidgetHead $(hamletFile "templates/doctree-head.hamlet")
       addScriptRemote "/static/jquery-1.10.2.min.js"
       addScriptRemote "/static/d3.v3.min.js"
---      toWidget $ $(juliusFile "templates/doctree-body.julius")
       addScriptRemote "/static/js-devel/doctree.js"
---      addScriptRemote "/static/text_object.js"
       addStylesheetRemote "/static/styles/doctree.css"
+      toWidgetBody $(hamletFile "templates/doctree-body.hamlet")
+      toWidgetHead $(hamletFile "templates/doctree-head.hamlet")
+      toWidget $ $(juliusFile "templates/doctree-body.julius")
+--      addScriptRemote "/static/text_object.js"
       {-
       let remotes = [
             "/polymer-themes/ice.html",

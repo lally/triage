@@ -27,16 +27,15 @@ data DocTreePath = DocTreePath
                    { pRevisionHash :: Text
                      -- ^ a SHA1
                    , pFilePath :: [Text]
-                   , pLineNumber :: Maybe Int
-                     -- ^ |Just n| if this is an entry in a
-                     -- file. Nothing if a dir.
+                   , pNodePath :: [Double]
+                     -- ^ Child indices in trees.  The empty list is
+                     -- the root.  The nth child is [n].
                    } deriving (Eq, Show)
 
 instance ToJSON DocTreePath where
-  toJSON (DocTreePath hash path Nothing) =
-    String (hash `tap` ":" `tap` (T.intercalate "/" path))
-  toJSON (DocTreePath hash path (Just n)) =
-    String (hash `tap` ":" `tap` (T.intercalate "/" path) `tap` "#" `tap` (tpack$ show n))
+  toJSON (DocTreePath hash path nodep) =
+    String (hash `tap` ":" `tap` (T.intercalate "/" path) `tap` "#" `tap` (
+               tpack $ L.intercalate "," $ map show nodep))
 
 -- |OrgNode/Text/Table/Source correspond to OrgMode NodeChild types,
 -- with Source meaning Babel.  TKEntity are any kind of embedded
@@ -110,13 +109,17 @@ instance ToJSON DocTreeEntry where
 instance ToJSON DocTreeEntity where
   toJSON (DTIssue iss) = toJSON iss
 
+fixDecodeErr :: String -> Maybe Word8 -> Maybe Char
+fixDecodeErr s (Just _) = Just '-'
+fixDecodeErr s Nothing = Nothing
+
 getContents :: (MonadGit r m) => TreeFilePath -> TreeEntry r -> m T.Text
 getContents name entry = do
   ty <- case entry of
     BlobEntry oid kind -> do
       blob <- lookupBlob oid
       value <- case (blobContents blob) of
-        BlobString str -> return $ TE.decodeUtf8 str
+        BlobString str -> return $ TE.decodeUtf8With fixDecodeErr str
         BlobStringLazy str -> return "lazy blobstring"
         BlobStream bytestrc -> return "blobstream"
         BlobSizedStream bytesrc len -> return "blobstream w/len "
@@ -125,22 +128,24 @@ getContents name entry = do
       return $ "tree: " `T.append` (renderObjOid oid)
     CommitEntry oid -> do
       return "commit"
-  return $ (TE.decodeUtf8 name) `T.append` ": " `T.append` ty
+  return $ (TE.decodeUtf8With fixDecodeErr name) `T.append` ": " `T.append` ty
 
 readBlobContents :: (MonadGit r m) => BlobContents m -> m String
-readBlobContents (BlobString str) = return $ T.unpack $ TE.decodeUtf8 str
+readBlobContents (BlobString str) =
+  do return $ T.unpack $ TE.decodeUtf8With fixDecodeErr str
 readBlobContents (BlobStringLazy str) = undefined
 {-  do
   let decoded = TE.decodeUtf8 str
   return $ T.unpack decoded -> -}
 readBlobContents (BlobStream src) = do
   str <- src $$ CL.consume
-  return $ T.unpack $ TE.decodeUtf8 $ BS.concat str
+  return $ T.unpack $ TE.decodeUtf8With fixDecodeErr $ BS.concat str
 readBlobContents (BlobSizedStream src len) = undefined -- !(ByteSource m) !Int
 
 getRecursiveContents :: (MonadGit r m) => (TreeFilePath, TreeEntry r)
                         -> m [(TreeFilePath, OM.OrgDoc)]
 getRecursiveContents (name, (BlobEntry oid (PlainBlob))) = do
+  -- TODO: put in filter to take out .gitignore, etc.
   blob <- lookupBlob oid
   let contents = blobContents blob
   text <- readBlobContents contents
@@ -171,11 +176,6 @@ loadRepo commit = do
   let xlateName (p,d) = (BS8.unpack p, d)
   return $ P.map xlateName contents
 
--- |Returns whether 'a' is a child of 'b'
-childOf :: DocTreePath -> DocTreePath -> Bool
-childOf a b@(DocTreePath hash path Nothing) = undefined
-childOf a b@(DocTreePath hash path (Just nr)) = undefined
-
 empty :: [a] -> Bool
 empty [] = True
 empty _ = False
@@ -199,19 +199,22 @@ nodeChildren children =
 
 makeDocEntry :: DocTreePath -> OM.Node -> DocTreeEntry
 makeDocEntry parent node =
-  let line = OM.tlLineNum $ OM.nLine node
-      path = DocTreePath (pRevisionHash parent) (pFilePath parent) line
-      (rawnodes, dat) = nodeChildren (OM.nChildren node)
+  let (rawnodes, dat) = nodeChildren (OM.nChildren node)
       prefixText = fmap (\(OM.Prefix s) -> T.pack s) $ OM.nPrefix node
       getStatusText (DI.Open) = "OPEN"
       getStatusText (DI.Active) = "ACTIVE"
       getStatusText (DI.Closed) = "CLOSED"
       statusText iss = Just (getStatusText $ DI.status iss)
+      indexedNodes = zip [1..] rawnodes
+      makeChildEntry (i, node) =
+        let childPath = parent { pNodePath = (pNodePath parent) ++ [fromIntegral i] }
+        in makeDocEntry childPath node
   in case OM.findItemInNode node of
-    (Just (DTIssue iss)) -> DocTreeEntry (T.pack $ DI.summary iss) path [] [] [] (
-      TKEntity "issue") (map T.pack $ DI.tags iss) (statusText iss) (Just $ DTIssue iss)
-    otherwise -> DocTreeEntry (T.pack $ OM.nTopic node) path (
-      map (makeDocEntry path) rawnodes) [] dat TKOrgNode (
+    (Just (DTIssue iss)) -> DocTreeEntry (T.pack $ DI.summary iss) parent [] [] [] (
+      TKEntity "issue") (map T.pack $ DI.tags iss) (statusText iss) (
+      Just $ DTIssue iss)
+    otherwise -> DocTreeEntry (T.pack $ OM.nTopic node) parent (
+      map makeChildEntry indexedNodes) [] dat TKOrgNode (
       map T.pack $ OM.nTags node) prefixText Nothing
 
 convertDoc :: [Text] -> DocTreePath -> OM.OrgDoc -> DocTreeEntry
@@ -222,7 +225,7 @@ convertDoc path parent doc =
         in case titles of
           [OM.OrgFileProperty n v] -> T.pack v
           otherwise -> L.last path
-  in DocTreeEntry title (DocTreePath sha path Nothing) (
+  in DocTreeEntry title (DocTreePath sha path []) (
     map (makeDocEntry parent) (OM.odNodes doc)) [] [] TKOrgNode [] Nothing Nothing
 
 updateTree' :: Int -> DocTreeEntry -> [Text] -> OM.OrgDoc -> DocTreeEntry
@@ -253,7 +256,7 @@ updateTree' n ent path doc =
                              tPath = DocTreePath {
                                pRevisionHash = pRevisionHash p,
                                pFilePath = pFilePath p ++ [L.head premain],
-                               pLineNumber = Nothing },
+                               pNodePath = [] },
                              tChildren = [],
                              tCompressedEntries = [],
                              tData = [],
@@ -300,10 +303,11 @@ loadRepoTree commit = do
   contents <- getRecursiveContents ("/", CommitEntry (commitOid commit))
   let oid = commitOid commit
       sha = renderOid $ unTagged oid
-      makePath (path, doc) = (T.split (=='/')$ TE.decodeUtf8 path, doc)
+      makePath (path, doc) = (T.split (=='/') $
+                                 TE.decodeUtf8With fixDecodeErr path, doc)
         -- (T.split (=='/') path, doc)
   -- get SHA of commit
-  let root = (DocTreeEntry sha (DocTreePath sha [] Nothing) [] [] [] TKDir []
+  let root = (DocTreeEntry sha (DocTreePath sha [] []) [] [] [] TKDir []
               Nothing Nothing)
       finalTree = foldl' updateTree root $ map makePath contents
       -- err: contents is [(TreeFilePath, OM.OrgDoc)], not [(Text,...)]

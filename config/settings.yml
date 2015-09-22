@@ -23,6 +23,6 @@ database:
 
 copyright: Insert copyright statement here
 #analytics: UA-YOURCODE
-repo: "_env:REPO:/home/lally/Work/test-git"
+repo: "_env:REPO:/home/lally/Work/test-org"
 branch: "_env:BRANCH:master"
 
