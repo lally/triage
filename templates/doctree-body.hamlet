@@ -1,16 +1,28 @@
-<paper-drawer-panel responsive-width="500px">
+<paper-drawer-panel responsive-width="1000px">
   <paper-header-panel drawer class="leftpanel">
-    <paper-toolbar class="has-shadow vertical layout">
-      <div id="topBar" class="flex">
-        <h4>Git Repos
-    <div class="leftcol">
-      $forall (sha, log) <- children
-        <paper-card heading=#{take 16 $ sha} class="leftcard">
-          <div class="card-content">#{take 500 $ log}
+    <div class="paper-header animate has-shadow">
+      This commit has &gt;=#{length children} parents.
+      <!-- <br><a style="display: inline" href="@{HeadR}">HEAD -->
+    <div class="leftcol fit vertical">
+      $forall (sha, log, date) <- children
+        <paper-card heading="#{date}: #{take 8 sha}" class="leftcard" draggable="true">
+          <div class="card-content">#{trim $ take 500 $ log}
+          <div class="card-actions">
+               <paper-button onclick="window.location='@{PathTreeR (T.pack sha) []}'">VIEW
 
   <paper-scroll-header-panel main class="flex mainbody">
     <paper-toolbar class="has-shadow">
       <paper-icon-button icon="menu" paper-drawer-toggle>
-      <span class="title">#{shaAbbrev}:#{fullPath}
+      <span class="title"><span class="sha">#{shaAbbrev}:</span><span class="msg">#{take 50 commitMsg}</span><span class="path">#{fullPath}</span>
     <div>
+      <div id="shelfArea">
+        <template is="dom-bind">
+          <button class="heading" aria-expanded$="[[isExpanded(opened1)]]" aria-controls="shelf" onclick="toggle('#shelf')">Shelf</button>
+          <iron-collapse id="shelf" tabindex="0" opened="{{opened1}}">
+            <div class="horizontal layout">
+              <div id="shelf-container">
+              <div id="inspector">
+                <div id="inspector-shelf-url">
+                <iframe id="inspector-shelf-content">
+
       <div id="tree-container">

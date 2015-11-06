@@ -5,6 +5,7 @@
 /robots.txt RobotsR GET
 
 / HomeR GET POST
-/headtree HeadR GET
+/head HeadR GET
 /doctree/#Text/*Texts PathTreeR GET
 /xhrtree/#Text/*Texts XhrPathTreeR GET
+/doc/#Text/*Texts DocR GET

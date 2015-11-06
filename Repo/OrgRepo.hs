@@ -34,7 +34,7 @@ data DocTreePath = DocTreePath
 
 instance ToJSON DocTreePath where
   toJSON (DocTreePath hash path nodep) =
-    String (hash `tap` ":" `tap` (T.intercalate "/" path) `tap` "#" `tap` (
+    String (hash `tap` (T.intercalate "/" path) `tap` "?path=" `tap` (
                tpack $ L.intercalate "," $ map show nodep))
 
 -- |OrgNode/Text/Table/Source correspond to OrgMode NodeChild types,
@@ -142,14 +142,20 @@ readBlobContents (BlobStream src) = do
   return $ T.unpack $ TE.decodeUtf8With fixDecodeErr $ BS.concat str
 readBlobContents (BlobSizedStream src len) = undefined -- !(ByteSource m) !Int
 
-getRecursiveContents :: (MonadGit r m) => (TreeFilePath, TreeEntry r)
+getRecursiveContents :: (MonadGit r m, MonadLogger m) =>
+                        (TreeFilePath, TreeEntry r)
                         -> m [(TreeFilePath, OM.OrgDoc)]
 getRecursiveContents (name, (BlobEntry oid (PlainBlob))) = do
   -- TODO: put in filter to take out .gitignore, etc.
-  blob <- lookupBlob oid
-  let contents = blobContents blob
-  text <- readBlobContents contents
-  return [(name, OM.orgFile text)]
+  let entryName = L.last $ BS8.split '/' name
+      suppressed = not (isSuffixOf ".org" entryName)
+  res <- if suppressed
+         then do return []
+         else do blob <- lookupBlob oid
+                 let contents = blobContents blob
+                 text <- readBlobContents contents
+                 return [(name, OM.orgFile text)]
+  return res
 
 getRecursiveContents (name, (BlobEntry oid (ExecutableBlob))) = return []
 getRecursiveContents (name, (BlobEntry oid (SymlinkBlob))) = return []
@@ -165,12 +171,31 @@ getRecursiveContents (name, (CommitEntry oid)) = do
   commit <- lookupCommit oid
   tree <- lookupTree (commitTree commit)
   entries <- sourceTreeEntries tree $$ CL.consume
+  $(logDebug) $ "Got contents: " ++ (T.pack $ L.intercalate "\n" (map (show . fst)  entries))
   contents <- mapM getRecursiveContents entries
   let prefixify (p, e) = (name P.++ p, e)
   return $ P.map prefixify $ L.concat contents
 --  getRecursiveContents (name, TreeEntry $ commitTree commit)
 
-loadRepo :: (MonadGit r m) => Commit r -> m [(String, OM.OrgDoc)]
+getDoc :: (MonadGit r m, MonadLogger m) => ByteString -> Commit r -> m String
+getDoc path commit = do
+  tree <- lookupTree (commitTree commit)
+  ent <- treeEntry tree path
+  $(logDebug) $ "getDoc: " ++  (decodeUtf8 path)
+  case ent of
+    (Just (BlobEntry oid _)) -> do
+        blob <- lookupBlob oid
+        let contents = blobContents blob
+        readBlobContents contents
+    (Just (TreeEntry oid)) -> return "A TreeEntry"
+    (Just (CommitEntry oid)) -> return "CommitEntry"
+    Nothing -> return "nothing"
+    otherwise -> return "no match for stored type."
+
+
+loadRepo :: (MonadGit r m, MonadLogger m) =>
+            Commit r
+            -> m [(String, OM.OrgDoc)]
 loadRepo commit = do
   contents <- getRecursiveContents ("/", CommitEntry (commitOid commit))
   let xlateName (p,d) = (BS8.unpack p, d)
@@ -278,10 +303,22 @@ mergeEntries parent child =
   let pathelem = case tKind parent of
         TKDir -> L.last $ pFilePath $ tPath $ parent
         TKOrgNode -> tTitle parent
-      title = if T.null (tTitle child) then tTitle parent else tTitle child
+      combinedTitle = if (not $ T.null $ tTitle parent)
+                      then if (not $ T.null $ tTitle child)
+                           then (tTitle parent `T.append` "/"
+                                 `T.append` tTitle child)
+                           else tTitle parent
+                      else tTitle child
+
+      eitherTitle = if T.null (tTitle child)
+                    then tTitle parent
+                    else tTitle child
+      resultTitle = if tKind parent == TKDir && tKind child == TKOrgNode
+                    then eitherTitle
+                    else combinedTitle
   in child { tCompressedEntries =
                 (pathelem, tKind parent):(tCompressedEntries parent),
-             tTitle = title}
+             tTitle = resultTitle}
 
 -- Finds entries with just 1 child and:
 --  (a) combines the parent and child
@@ -290,13 +327,12 @@ compressTree :: DocTreeEntry -> DocTreeEntry
 compressTree input =
   case tChildren input of
     [] -> input
-    -- TODO: match a 1-element list and merge
     [child] -> compressTree (mergeEntries input child)
     otherwise -> input {
       tChildren = map compressTree (tChildren input) }
 
 
-loadRepoTree :: (MonadGit r m) => Commit r -> m DocTreeEntry
+loadRepoTree :: (MonadGit r m, MonadLogger m) => Commit r -> m DocTreeEntry
 loadRepoTree commit = do
   -- This is a list of (TreeFilePath, OrgDoc).  Pull all the paths out
   -- and construct a tree for the ancestor directory structure.

@@ -1,3 +1,5 @@
+/* Tree-only Styling */
+
 .node {
     cursor: pointer;
 }
@@ -18,7 +20,7 @@
 
 .link {
     fill: none;
-    stroke: #ccc;
+    stroke: #aaa;
     stroke-width: 1.5px;
 }
 .templink {
@@ -45,16 +47,7 @@
     fill: lightblue;
 }
 
-.leftcard {
-    width: 95%;
-    margin-bottom: 16px;
-}
 /*
-.leftcard .header.paper-card .title-text.paper-card {
-    font-family: "PT Sans Narrow" monospace;
-    font-stretch: ultra-condensed;
-    font-size: 15px;
-}
         // TODO: move this into a CLASS tag.
             .style("stroke", function(d) {
                 if (d._children && d._children != null) {
@@ -206,3 +199,4 @@ node .grey {
 node .lightgrey {
     fill: #f3f3f3;
 }
+

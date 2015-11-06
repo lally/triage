@@ -91,6 +91,8 @@ library
                  , orgmode
                  , tagged
                  , org-issue-sync
+                 , blaze-markup
+                 , time-locale-compat
 
 executable         triage
     if flag(library-only)

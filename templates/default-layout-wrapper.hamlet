@@ -11,5 +11,5 @@ $newline never
 
     <script>
       document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/,'js');
-  <body .fullbleed .layout .vertical>
+  <body .fullbleed .layout .vertical unresolved>
     ^{pageBody pc}

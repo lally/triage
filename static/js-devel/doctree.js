@@ -8,6 +8,10 @@ var childHeight = 24;
 var childWidth = 225;
 var slotHeight = 75;
 
+function gotoUrl(url) {
+    window.location = url;
+}
+
 function makeNodeSvg(d,i) {
     var enter = d3.select(this);
     var prio = '';
@@ -97,7 +101,7 @@ function makeNodeSvg(d,i) {
           .attr("transform", "scale(1.5,1)");
 
         clipRgn = enter.append("g")
-            .attr("transform", "translate(" + -(childWidth / 2) + ",0)");
+            .attr("transform", "translate(" + -(childWidth/2) + ",0)");
 
         var clippedRgn = clipRgn.append("g")
             .attr("clip-path", "url(#nodeClip)");
@@ -112,7 +116,7 @@ function makeNodeSvg(d,i) {
         clippedRgn.append("text")
             .attr("class", "issueOrigin " + prio)
             .attr("text-anchor", "end")
-            .attr("x", -childWidth + 8)
+            .attr("x", childWidth - 8)
             .attr("y", -7)
             .text(d.value.type + ":" + d.value.origin + "#" + d.value.number);
 
@@ -216,16 +220,16 @@ function nextEpsilon() {
 }
 
 function compareNodes(a, b) {
-    return comparePaths(a.path, b.path);
+    return comparePaths(b.path,a.path);
 }
 
 function comparePaths(a, b) {
-    if (a.split("#")[1].length < 1 &&
-        b.split("#")[1].length < 1) {
+    if (a.split("=")[1].length < 1 &&
+        b.split("=")[1].length < 1) {
         return a < b;
     }
-    var apathElems = a.split("#")[1].split(",");
-    var bpathElems = b.split("#")[1].split(",");
+    var apathElems = a.split("=")[1].split(",");
+    var bpathElems = b.split("=")[1].split(",");
     for (var i = 0; i < apathElems.length; i++) {
         if (apathElems[i] != bpathElems[i]) {
             var result = parseInt(apathElems[i]) < parseInt(bpathElems[i]);
@@ -251,10 +255,10 @@ function addChildBetween(prev, next) {
 }
 
 function addChildAfter(parent) {
-    if (parent.children || parent._children) {
+/*    if (parent.children || parent._children) {
         throw ("Node has children, yet calling addChildAfter!");
-    }
-    return parent.path + "," + nextEpsilon();
+    } */
+    return parent + "," + nextEpsilon();
 }
 
 // A recursive helper function for performing some setup by
@@ -284,8 +288,15 @@ function getDeltas() {
             resultList.push([d.startPath, d.path]);
         }},
           function(d) {
-              return d.children && d.children.length > 0 ? d.children : null;
+              if (d.children && d.children.length > 0) {
+                  return d.children;
+              } else if (d._children && d._children.length > 0) {
+                  return d._children;
+              } else {
+                  return null;
+              }
           });
+    return resultList;
 }
 
 // Processes JSON data for the graph.
@@ -306,7 +317,9 @@ function setupTree(error, treeData) {
 
     // size of the diagram
     var viewerWidth = $(document).width();
-    var viewerHeight = $(document).height();
+    var viewerHeight = $(document).height() - 64;  // take off the top-bar.
+
+    makeShelf(viewerWidth);
 
     var tree = d3.layout.tree()
         .size([viewerHeight, viewerWidth]);
@@ -327,17 +340,29 @@ function setupTree(error, treeData) {
         d.startPath = d.path;
         d.depth = num;
     }, function(d) {
-        return d.children && d.children.length > 0 ? d.children : null;
+        if (d.children && d.children.length > 0) {
+            return d.children;
+        } else if (d._children && d._children.length > 0) {
+            return d._children;
+        } else {
+            return null; 
+        }
     });
 
     // Call visit to close nodes with many children, or nodes that are
     // DONE or CLOSED
     visit(treeData, function(d, n) {
-        if (( n >= 4 && d.children && d.children.length > 6)
-            || (n > 2 && d.children && d.children.length > 16)
-            || d.state == "DONE" || d.state == "CLOSED"
-            || d.tags.indexOf("ARCHIVE") >= 0 || d.tags.indexOf("IGNORE") >= 0
-            || n > 6) {
+        if (n == 1 && d.children && d.children.length > 6) {
+            // Special case for root: just show children.
+            if (d.children && d.children.length > 0) {
+                for (var i = 0; i < d.children.length; i++) {
+                    collapse(d.children[i]);
+                }
+            }
+        } else if (( n >= 4 && d.children && d.children.length > 6)
+                   || d.state == "DONE" || d.state == "CLOSED"
+                   || d.tags.indexOf("ARCHIVE") >= 0 || d.tags.indexOf("IGNORE") >= 0
+                   || n > 6) {
             collapse(d);
         }
     }, function(d) {
@@ -372,7 +397,6 @@ function setupTree(error, treeData) {
     sortTree();
 
     // TODO: Pan function, can be better implemented.
-
     function pan(domNode, direction) {
         var speed = panSpeed;
         if (panTimer) {
@@ -380,17 +404,21 @@ function setupTree(error, treeData) {
             // tCs = translateCoords
             tCs = d3.transform(svgGroup.attr("transform"));
             if (direction == 'left' || direction == 'right') {
-                tX = direction == 'left' ? tCs.translate[0] + speed : tCs.translate[0] - speed;
+                tX = direction == 'left' ? 
+                    tCs.translate[0] + speed : tCs.translate[0] - speed;
                 tY = tCs.translate[1];
             } else if (direction == 'up' || direction == 'down') {
                 tX = tCs.translate[0];
-                tY = direction == 'up' ? tCs.translate[1] + speed : tCs.translate[1] - speed;
+                tY = direction == 'up' ? 
+                    tCs.translate[1] + speed : tCs.translate[1] - speed;
             }
             scaleX = tCs.scale[0];
             scaleY = tCs.scale[1];
             scale = zoomListener.scale();
-            svgGroup.transition().attr("transform", "translate(" + tX + "," + tY + ")scale(" + scale + ")");
-            d3.select(domNode).select('g.node').attr("transform", "translate(" + tX + "," + tY + ")");
+            svgGroup.transition().attr("transform", "translate(" + tX + "," + tY + 
+                                       ")scale(" + scale + ")");
+            d3.select(domNode).select('g.node').attr("transform", "translate(" + tX + 
+                                                     "," + tY + ")");
             zoomListener.scale(zoomListener.scale());
             zoomListener.translate([tX, tY]);
             panTimer = setTimeout(function() {
@@ -400,9 +428,9 @@ function setupTree(error, treeData) {
     }
 
     // Define the zoom function for the zoomable tree
-
     function zoom() {
-        svgGroup.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+        svgGroup.attr("transform", "translate(" + d3.event.translate +
+                      ")scale(" + d3.event.scale + ")");
     }
 
 
@@ -493,6 +521,7 @@ function setupTree(error, treeData) {
 
             // get coords of mouseEvent relative to svg container to allow for panning
             relCoords = d3.mouse($('svg').get(0));
+/*
             if (relCoords[0] < panBoundary) {
                 panTimer = true;
                 pan(this, 'left');
@@ -513,7 +542,7 @@ function setupTree(error, treeData) {
 
                 }
             }
-
+*/
             d.x0 += d3.event.dy;
             d.y0 += d3.event.dx;
             var node = d3.select(this);
@@ -534,11 +563,28 @@ function setupTree(error, treeData) {
                 if (typeof selectedNode.children !== 'undefined' || 
                     typeof selectedNode._children !== 'undefined') {
                     if (typeof selectedNode.children !== 'undefined') {
+                        if (selectedNode.children.length > 0) {
+                            draggingNode.path =
+                                addChildBetween(
+                                    selectedNode.children[selectedNode.children.length-1].path,
+                                    null);
+                        } else {
+                            draggingNode.path = addChildAfter(selectedNode.path);
+                        }
                         selectedNode.children.push(draggingNode);
                     } else {
+                        if (selectedNode._children.length > 0) {
+                            draggingNode.path =
+                                addChildBetween(
+                                    selectedNode._children[selectedNode._children.length-1].path,
+                                    null);
+                        } else {
+                            draggingNode.path = addChildAfter(selectedNode.path);
+                        }
                         selectedNode._children.push(draggingNode);
                     }
                 } else {
+                    draggingNode.path = addChildAfter(selectedNode.path);
                     selectedNode.children = [];
                     selectedNode.children.push(draggingNode);
                 }
@@ -666,12 +712,11 @@ function setupTree(error, treeData) {
     }
 
     // Toggle children on click.
-
     function click(d) {
         if (d3.event.defaultPrevented) return; // click suppressed
         d = toggleChildren(d);
+        inspect(d);
         update(d);
-        centerNode(d);
     }
 
     function update(source) {
