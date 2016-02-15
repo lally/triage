@@ -13,7 +13,8 @@ module Application
     ) where
 
 import Control.Logging
-import Control.Monad.Logger                 --(liftLoc, runStdoutLoggingT,  runLoggingT, MonadLogger(..), MonadLoggerIO(..), LoggingT(..))
+import Control.Monad.Logger
+  --(liftLoc, runStdoutLoggingT,  runLoggingT, MonadLogger(..), MonadLoggerIO(..), LoggingT(..))
 import qualified Data.Conduit.List as CL
 -- import Data.List (intercalate)
 -- import Data.ByteString.Char8 (unpack)
@@ -43,6 +44,8 @@ import Git.Libgit2
 import Handler.Common
 import Handler.Home
 import Handler.DocTree
+import Handler.Scratch
+import Yesod.Fay
 
 -- This line actually creates our YesodDispatch instance. It is the second half
 -- of the call to mkYesodData which occurs in Foundation.hs. Please see the
@@ -75,24 +78,6 @@ makeFoundation appSettings = do
       ref <- resolveReference "refs/heads/master"
       let refName = maybe "(not found)" show ref
       $(logDebug) $ " HEAD shows up as " ++ (pack $ show refName)
-      {-
-      case ref of
-        Just r -> do
-          obj <- lookupObject r
-          case obj of
-            CommitObj r -> do
-              let desc = "commit: " ++ (renderObjOid (commitOid r)) ++ ": " ++ (commitLog r)
-              tree <- lookupTree (commitTree r)
-              entries <- sourceTreeEntries tree $$ CL.consume
-              res <- mapM (\(a, b) -> getContents a b) entries
-              let names = show $ intercalate "\n - " $ res
-              $(logDebug) $ " - " ++ (pack names)
-              $(logDebug) $ " which is " ++ desc
-            _ -> do $(logDebug) $ "not a commit..." 
-          return ()
-        _ -> do
-          return ()
-     -}
     -- We need a log function to create a connection pool. We need a connection
     -- pool to create our foundation. And we need our foundation to get a
     -- logging function. To get out of this loop, we initially create a

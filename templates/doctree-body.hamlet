@@ -1,4 +1,4 @@
-<paper-drawer-panel responsive-width="1000px">
+<paper-drawer-panel responsive-width="5000px">
   <paper-header-panel drawer class="leftpanel">
     <div class="paper-header animate has-shadow">
       This commit has &gt;=#{length children} parents.
@@ -15,14 +15,4 @@
       <paper-icon-button icon="menu" paper-drawer-toggle>
       <span class="title"><span class="sha">#{shaAbbrev}:</span><span class="msg">#{take 50 commitMsg}</span><span class="path">#{fullPath}</span>
     <div>
-      <div id="shelfArea">
-        <template is="dom-bind">
-          <button class="heading" aria-expanded$="[[isExpanded(opened1)]]" aria-controls="shelf" onclick="toggle('#shelf')">Shelf</button>
-          <iron-collapse id="shelf" tabindex="0" opened="{{opened1}}">
-            <div class="horizontal layout">
-              <div id="shelf-container">
-              <div id="inspector">
-                <div id="inspector-shelf-url">
-                <iframe id="inspector-shelf-content">
-
       <div id="tree-container">

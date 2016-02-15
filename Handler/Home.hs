@@ -6,6 +6,7 @@ import Yesod.Form.Bootstrap3 (BootstrapFormLayout (..), renderBootstrap3,
 
 import Control.Logging
 import Control.Monad.Logger
+import Language.Haskell.TH
 
 -- This is a handler function for the GET request method on the HomeR
 -- resource pattern. All of your resource patterns are defined in
@@ -22,6 +23,7 @@ getHomeR = do
     defaultLayout $ do
         aDomId <- newIdent
         setTitle "Welcome To Yesod!"
+        $(fayFile' (ConE 'StaticR) "Home")
         $(widgetFile "homepage")
 
 postHomeR :: Handler Html

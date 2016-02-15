@@ -4,6 +4,7 @@ var shelf_opened = false;
 var inspected_node = undefined;
 
 function setShelfContent(node) {
+/*
     if (node && node !== undefined && node !== null) {
         var path = node.startPath;
         var url = window.location.origin + "/doc/"+path;
@@ -15,7 +16,7 @@ function setShelfContent(node) {
         }
     } else {
         d3.select("#inspector-shelf-content").innerHtml = "<b>No node selected.</b>"
-    }
+    } */
 }
 
 function toggle(selector) {
@@ -28,10 +29,11 @@ function toggle(selector) {
       }
   }
 }
-
+/*
 document.querySelector('template[is=dom-bind]').isExpanded = function(opened) {
   return String(opened);
 };
+*/
 
 function inspect(node) {
     if (shelf_opened && node !== undefined && node !== null) {
@@ -79,18 +81,17 @@ function makeShelf(fullAreaWidth) {
     var shelfWidth = width / 2;
     var inspectorWidth = width / 2;
     var height = 300;
-    var divId = "#inspector-shelf-content";
     var dragListener = d3.behavior.drag();
 
     // Size the top-level container.
-    d3.select("#shelfArea")
+/*    d3.select("#shelfArea")
         .attr("style", "width: " + width);
     d3.select("div#shelfArea > button.heading")
         .attr("style", "width: " + width);
-
+*/
     // Size the individual elements.
     if (shelfWidth > 0) {
-        var baseSvg = d3.select("#shelf-container").append("svg")
+        var baseSvg = d3.select("#shelf-container")
             .attr("width", shelfWidth)
             .attr("height", height)
             .attr("class", "shelfSvg")
@@ -103,7 +104,7 @@ function makeShelf(fullAreaWidth) {
             .attr("onmouseout", "onMouseOut(event)")
 
     }
-    if (inspectorWidth > 0) {
+/*    if (inspectorWidth > 0) {
         d3.select("#inspector")
             .attr("style",
                   "width: " + inspectorWidth +
@@ -117,7 +118,7 @@ function makeShelf(fullAreaWidth) {
             .attr("style",
                   "width: " + inspectorWidth +
                   "; height: " +  (height-20));
-    }
+    }*/
     setShelfContent(null);
 }
 

@@ -12,7 +12,7 @@ Flag library-only
     Default:       False
 
 library
-    hs-source-dirs: ., app
+    hs-source-dirs: ., app, fay-shared
     exposed-modules: Application
                      Foundation
                      Import
@@ -23,8 +23,11 @@ library
                      Handler.Common
                      Handler.Home
                      Handler.DocTree
+                     Handler.Scratch
                      Repo.OrgRepo
                      Repo.GitUtils
+                     Render.Node
+                     SharedTypes
 
     if flag(dev) || flag(library-only)
         cpp-options:   -DDEVELOPMENT
@@ -47,6 +50,7 @@ library
                 DeriveDataTypeable
                 ViewPatterns
                 TupleSections
+                UnicodeSyntax
                 RecordWildCards
                 AllowAmbiguousTypes
 
@@ -93,14 +97,19 @@ library
                  , org-issue-sync
                  , blaze-markup
                  , time-locale-compat
+                 , fay
+                 , fay-dom
+                 , yesod-fay
+                 , fay-text
+                 , fay-jquery
 
 executable         triage
     if flag(library-only)
         Buildable: False
 
     main-is:           main.hs
-    hs-source-dirs:    app
-    build-depends:     base, triage
+    hs-source-dirs:    app, fay-shared
+    build-depends:     base, triage, ghc-mod
 
     ghc-options:       -threaded -O2 -rtsopts -with-rtsopts=-N
 

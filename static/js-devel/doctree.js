@@ -483,13 +483,17 @@ function setupTree(error, treeData) {
     }
 
     // define the baseSvg, attaching a class for styling and the zoomListener
-    var baseSvg = d3.select("#tree-container").append("svg")
+    var topSvg = d3.select("#tree-container").append("svg")
         .attr("width", viewerWidth)
         .attr("height", viewerHeight)
         .attr("class", "overlay")
         .call(zoomListener);
+    var shelfTopLevelContainer = topSvg.append("g").attr("id", "shelf-container");
 
-    var clip = baseSvg.append("svg:clipPath")
+    // Append a group which holds all nodes and which the zoom Listener can act upon.
+    var svgGroup = topSvg.append("g");
+
+    var clip = topSvg.append("svg:clipPath")
           .attr("id", "nodeClip")
         .append("svg:rect")
           .attr('x', -1).attr('y',-12)
@@ -521,28 +525,6 @@ function setupTree(error, treeData) {
 
             // get coords of mouseEvent relative to svg container to allow for panning
             relCoords = d3.mouse($('svg').get(0));
-/*
-            if (relCoords[0] < panBoundary) {
-                panTimer = true;
-                pan(this, 'left');
-            } else if (relCoords[0] > ($('svg').width() - panBoundary)) {
-
-                panTimer = true;
-                pan(this, 'right');
-            } else if (relCoords[1] < panBoundary) {
-                panTimer = true;
-                pan(this, 'up');
-            } else if (relCoords[1] > ($('svg').height() - panBoundary)) {
-                panTimer = true;
-                pan(this, 'down');
-            } else {
-                try {
-                    clearTimeout(panTimer);
-                } catch (e) {
-
-                }
-            }
-*/
             d.x0 += d3.event.dy;
             d.y0 += d3.event.dx;
             var node = d3.select(this);
@@ -560,13 +542,14 @@ function setupTree(error, treeData) {
                 if (index > -1) {
                     draggingNode.parent.children.splice(index, 1);
                 }
-                if (typeof selectedNode.children !== 'undefined' || 
+                if (typeof selectedNode.children !== 'undefined' ||
                     typeof selectedNode._children !== 'undefined') {
                     if (typeof selectedNode.children !== 'undefined') {
                         if (selectedNode.children.length > 0) {
                             draggingNode.path =
                                 addChildBetween(
-                                    selectedNode.children[selectedNode.children.length-1].path,
+                                    selectedNode.children[
+                                        selectedNode.children.length-1].path,
                                     null);
                         } else {
                             draggingNode.path = addChildAfter(selectedNode.path);
@@ -576,7 +559,8 @@ function setupTree(error, treeData) {
                         if (selectedNode._children.length > 0) {
                             draggingNode.path =
                                 addChildBetween(
-                                    selectedNode._children[selectedNode._children.length-1].path,
+                                    selectedNode._children[
+                                        selectedNode._children.length-1].path,
                                     null);
                         } else {
                             draggingNode.path = addChildAfter(selectedNode.path);
@@ -688,8 +672,10 @@ function setupTree(error, treeData) {
         scale = zoomListener.scale();
         console.log("leftCenterNode: scale=" + JSON.stringify (scale) + 
                     ", source.0s=[" + source.x0 + ", " + source.y0 + "]");
-        y = (-source.x0 * scale) + viewerHeight / 2;
-        x = (-source.y0 * scale) + childWidth / 2 + 20; //  + viewerWidth / 2;
+        x = -source.y0;
+        y = -source.x0;
+        x = (x * scale) + childWidth / 2 + 20;
+        y = (y * scale) + viewerHeight / 2;
         d3.select('g').transition()
             .duration(duration)
             .attr("transform", "translate(" + x + "," + y + ")scale(" + scale + ")");
@@ -890,9 +876,6 @@ function setupTree(error, treeData) {
             d.y0 = d.y;
         });
     }
-
-    // Append a group which holds all nodes and which the zoom Listener can act upon.
-    var svgGroup = baseSvg.append("g");
 
     // Define the root
     root = treeData;

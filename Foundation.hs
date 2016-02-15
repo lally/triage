@@ -2,12 +2,16 @@ module Foundation where
 
 import Import.NoFoundation
 import Database.Persist.Sql (ConnectionPool, runSqlPool)
+import SharedTypes
 import Text.Hamlet          (hamletFile)
 import Text.Jasmine         (minifym)
 import Yesod.Auth.BrowserId (authBrowserId)
 import Yesod.Auth.Message   (AuthMessage (InvalidLogin))
 import Yesod.Default.Util   (addStaticContentExternal)
 import Yesod.Core.Types     (Logger)
+import Yesod.Fay
+
+import Fay.Convert (readFromFay)
 
 import Git
 import Git.Libgit2
@@ -158,6 +162,15 @@ instance RenderMessage App FormMessage where
 
 unsafeHandler :: App -> Handler a -> IO a
 unsafeHandler = Unsafe.fakeHandlerGetLogger appLogger
+instance YesodJquery App
+
+instance YesodFay App where
+    yesodFayCommand render command =
+        case readFromFay command of
+            Just (RollDie r) -> render r "Four" -- guaranteed to be random, see http://xkcd.com/221/
+            Nothing -> invalidArgs ["Invalid command"]
+
+    fayRoute = FaySiteR
 
 -- Note: Some functionality previously present in the scaffolding has been
 -- moved to documentation in the Wiki. Following are some hopefully helpful
