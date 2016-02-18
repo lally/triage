@@ -13,5 +13,5 @@ import Fay
 import Fay.FFI
 #endif
 
-data Command = RollDie (Returns Text)
+data Command = LookupRef Text (Returns Text)
     deriving (Read, Typeable, Data)

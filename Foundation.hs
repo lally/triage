@@ -10,6 +10,10 @@ import Yesod.Auth.Message   (AuthMessage (InvalidLogin))
 import Yesod.Default.Util   (addStaticContentExternal)
 import Yesod.Core.Types     (Logger)
 import Yesod.Fay
+import Control.Logging
+import Control.Monad.Logger
+
+import qualified Git.Libgit2 as LG2
 
 import Fay.Convert (readFromFay)
 
@@ -167,7 +171,14 @@ instance YesodJquery App
 instance YesodFay App where
     yesodFayCommand render command =
         case readFromFay command of
-            Just (RollDie r) -> render r "Four" -- guaranteed to be random, see http://xkcd.com/221/
+            Just (LookupRef name r) -> do
+              app ← getYesod
+              let rPath = repoRefPath $ appRepo app
+              headSHA ← runStdoutLoggingT $ withRepository LG2.lgFactoryLogger rPath $ do
+                    ref ← resolveReference ("refs/heads/" ++ name)
+                    let refName = maybe "(not found)" show ref
+                    return refName
+              render r "headSHA" -- guaranteed to be random, see http://xkcd.com/221/
             Nothing -> invalidArgs ["Invalid command"]
 
     fayRoute = FaySiteR
