@@ -10,7 +10,12 @@ import Prelude
 alert :: String -> Fay ()
 alert = ffi "alert(typeof(%1) + ': ' + JSON.stringify(%1))"
 
-
+rollDie ∷ Fay ()
+rollDie = do call RollDie alert
+             return false
 main :: Fay ()
-main = void $ select ".btn-primary" >>= onClick (const $ call RollDie alert >> return False)
+main = do
+       button ← select ".btn-primary"
+       button onClick (
+         const $ call RollDie alert >> return False)
 
