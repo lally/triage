@@ -14,3 +14,8 @@ cabal.sandbox.config
 *.swp
 .stack-work
 static/bower_components/
+fay/Fay
+static/ZoomableMapTiles.html
+static/d3.geo.tile.min.js
+static/thumbnail.png
+

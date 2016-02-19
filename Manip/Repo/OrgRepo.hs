@@ -1,26 +1,31 @@
-module Repo.OrgRepo where
+module Manip.Repo.OrgRepo where
 import Data.Aeson
 import Data.Maybe
 import Data.Tagged
 import Git
+import Control.Monad.Logger
+
 -- TODO: split out Issues from org-issue-sync for inclusion here.
 -- OR, just make org-issue-sync a dependency.
 import Import as P
-import Debug.Trace
+--import Debug.Trace
 import qualified Data.List as L
 import qualified Data.OrgMode as OM
 import qualified Data.Issue as DI
-import qualified Data.OrgIssue as DOI
-import qualified Data.IssueJSON as IJ
+import qualified Data.OrgIssue() -- as DOI
+import qualified Data.IssueJSON() -- as IJ
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BSL
+--import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Char8 as BS8
 import qualified Data.Conduit.List as CL
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text as T
+import qualified Git.Libgit2 as LG2
+
 tpack :: String -> T.Text
 tpack = T.pack
 
+tap ∷ T.Text → T.Text → T.Text
 tap = T.append
 
 data DocTreePath = DocTreePath
@@ -33,8 +38,8 @@ data DocTreePath = DocTreePath
                    } deriving (Eq, Show)
 
 instance ToJSON DocTreePath where
-  toJSON (DocTreePath hash path nodep) =
-    String (hash `tap` (T.intercalate "/" path) `tap` "?path=" `tap` (
+  toJSON (DocTreePath hsh path nodep) =
+    String (hsh `tap` (T.intercalate "/" path) `tap` "?path=" `tap` (
                tpack $ L.intercalate "," $ map show nodep))
 
 -- |OrgNode/Text/Table/Source correspond to OrgMode NodeChild types,
@@ -62,7 +67,7 @@ instance OM.NodeUpdate DocTreeEntity where
 
   -- updateNodeLine :: DocTreeEntity -> OM.Node -> Maybe OM.Node
   updateNodeLine (DTIssue i) n = OM.updateNodeLine i n
-  updateNodeLine (DTOrg o) n = Just n
+  updateNodeLine (DTOrg _) n = Just n
 
 -- |A graph node.  Data in 'tData' will go into the expanded card of
 -- this node.  Children will show up as suboordinate nodes.  This
@@ -82,9 +87,9 @@ data DocTreeEntry = DocTreeEntry
 
 instance ToJSON DocTreeData where
   toJSON (DDText text) = String text
-  toJSON (DDTable table) = object []
-  toJSON (DDSource babel) = object []
-  toJSON (DDIssue text) = object []
+  toJSON (DDTable _) = object []
+  toJSON (DDSource _) = object []
+  toJSON (DDIssue _) = object []
 
 instance ToJSON DocTreeKind where
   toJSON TKDir = String "directory"
@@ -108,39 +113,41 @@ instance ToJSON DocTreeEntry where
 
 instance ToJSON DocTreeEntity where
   toJSON (DTIssue iss) = toJSON iss
+  toJSON (DTOrg _) = object []
 
 fixDecodeErr :: String -> Maybe Word8 -> Maybe Char
-fixDecodeErr s (Just _) = Just '-'
-fixDecodeErr s Nothing = Nothing
+fixDecodeErr _ (Just _) = Just '-'
+fixDecodeErr _ Nothing = Nothing
 
 getContents :: (MonadGit r m) => TreeFilePath -> TreeEntry r -> m T.Text
 getContents name entry = do
   ty <- case entry of
-    BlobEntry oid kind -> do
+    BlobEntry oid _ -> do
       blob <- lookupBlob oid
       value <- case (blobContents blob) of
         BlobString str -> return $ TE.decodeUtf8With fixDecodeErr str
-        BlobStringLazy str -> return "lazy blobstring"
-        BlobStream bytestrc -> return "blobstream"
-        BlobSizedStream bytesrc len -> return "blobstream w/len "
+        BlobStringLazy _ -> return "lazy blobstring"
+        BlobStream _ -> return "blobstream"
+        BlobSizedStream _ _ -> return "blobstream w/len "
       return value
     TreeEntry oid -> do
       return $ "tree: " `T.append` (renderObjOid oid)
-    CommitEntry oid -> do
+    CommitEntry _ -> do
       return "commit"
   return $ (TE.decodeUtf8With fixDecodeErr name) `T.append` ": " `T.append` ty
 
 readBlobContents :: (MonadGit r m) => BlobContents m -> m String
 readBlobContents (BlobString str) =
   do return $ T.unpack $ TE.decodeUtf8With fixDecodeErr str
-readBlobContents (BlobStringLazy str) = undefined
+readBlobContents (BlobStringLazy _) =fail "readBlobContents (BlobStringLazy) not defined yet."
+                                     -- undefined
 {-  do
   let decoded = TE.decodeUtf8 str
   return $ T.unpack decoded -> -}
 readBlobContents (BlobStream src) = do
   str <- src $$ CL.consume
   return $ T.unpack $ TE.decodeUtf8With fixDecodeErr $ BS.concat str
-readBlobContents (BlobSizedStream src len) = undefined -- !(ByteSource m) !Int
+readBlobContents (BlobSizedStream _ _) = fail "readBlobContents (BlobSizedStream) undefined"  -- !(ByteSource m) !Int
 
 getRecursiveContents :: (MonadGit r m, MonadLogger m) =>
                         (TreeFilePath, TreeEntry r)
@@ -157,9 +164,9 @@ getRecursiveContents (name, (BlobEntry oid (PlainBlob))) = do
                  return [(name, OM.orgFile text)]
   return res
 
-getRecursiveContents (name, (BlobEntry oid (ExecutableBlob))) = return []
-getRecursiveContents (name, (BlobEntry oid (SymlinkBlob))) = return []
-getRecursiveContents (name, (TreeEntry oid)) = return []
+getRecursiveContents (_, (BlobEntry _ (ExecutableBlob))) = return []
+getRecursiveContents (_, (BlobEntry _ (SymlinkBlob))) = return []
+getRecursiveContents (_, (TreeEntry _)) = return []
 {- do
   tree <- lookupTree oid
   entries <- sourceTreeEntries tree $$ CL.consume
@@ -187,10 +194,10 @@ getDoc path commit = do
         blob <- lookupBlob oid
         let contents = blobContents blob
         readBlobContents contents
-    (Just (TreeEntry oid)) -> return "A TreeEntry"
-    (Just (CommitEntry oid)) -> return "CommitEntry"
+    (Just (TreeEntry _)) -> return "A TreeEntry"
+    (Just (CommitEntry _)) -> return "CommitEntry"
+--    (Just _) -> return "no match for stored type."
     Nothing -> return "nothing"
-    otherwise -> return "no match for stored type."
 
 
 loadRepo :: (MonadGit r m, MonadLogger m) =>
@@ -213,7 +220,7 @@ nodeChildren children =
         | OM.nTopic n == "ISSUE EVENTS" = Nothing
         | otherwise = Just n
       isNode _ = Nothing
-      nodeString (OM.ChildNode n) = Nothing
+      nodeString (OM.ChildNode _) = Nothing
       nodeString (OM.ChildText ln) =
         Just (DDText $ T.pack $ OM.tlText ln)
       nodeString (OM.ChildDrawer d) =
@@ -231,14 +238,15 @@ makeDocEntry parent node =
       getStatusText (DI.Closed) = "CLOSED"
       statusText iss = Just (getStatusText $ DI.status iss)
       indexedNodes = zip [1..] rawnodes
-      makeChildEntry (i, node) =
+      makeChildEntry ∷ (Int, OM.Node) → DocTreeEntry
+      makeChildEntry (i, cnode) =
         let childPath = parent { pNodePath = (pNodePath parent) ++ [fromIntegral i] }
-        in makeDocEntry childPath node
+        in makeDocEntry childPath cnode
   in case OM.findItemInNode node of
     (Just (DTIssue iss)) -> DocTreeEntry (T.pack $ DI.summary iss) parent [] [] [] (
       TKEntity "issue") (map T.pack $ DI.tags iss) (statusText iss) (
       Just $ DTIssue iss)
-    otherwise -> DocTreeEntry (T.pack $ OM.nTopic node) parent (
+    _ -> DocTreeEntry (T.pack $ OM.nTopic node) parent (
       map makeChildEntry indexedNodes) [] dat TKOrgNode (
       map T.pack $ OM.nTags node) prefixText Nothing
 
@@ -248,8 +256,8 @@ convertDoc path parent doc =
       title =
         let titles = filter (\p -> OM.fpName p == "TITLE") $ OM.odProperties doc
         in case titles of
-          [OM.OrgFileProperty n v] -> T.pack v
-          otherwise -> L.last path
+          [OM.OrgFileProperty _ v] -> T.pack v
+          _ -> L.last path
   in DocTreeEntry title (DocTreePath sha path []) (
     map (makeDocEntry parent) (OM.odNodes doc)) [] [] TKOrgNode [] Nothing Nothing
 
@@ -257,18 +265,18 @@ updateTree' :: Int -> DocTreeEntry -> [Text] -> OM.OrgDoc -> DocTreeEntry
 updateTree' n ent path doc =
   let p = tPath ent
       c = tChildren ent
-      d = tData ent
-      k = tKind ent
+--      d = tData ent
+--      k = tKind ent
       premain = drop n path
   in if empty premain
      then ent { tChildren = (convertDoc path p doc):c }
-     else let matchingChild cld =
-                let fp = drop n $ pFilePath $ tPath cld
+     else let matchingChild ccld =
+                let fp = drop n $ pFilePath $ tPath ccld
                 in L.head fp == L.head premain
-              intNodeName =
+{-              intNodeName =
                 if (T.length $ L.head premain) > 0
                 then L.head premain
-                else L.head $ dropWhile (\n -> T.length n < 1) $ reverse path
+                else L.head $ dropWhile (\n -> T.length n < 1) $ reverse path -}
               (pfx, cld, sfx) =
                 case L.findIndex matchingChild c of
                      (Just i) -> let (f, hd) = splitAt i c
@@ -303,6 +311,7 @@ mergeEntries parent child =
   let pathelem = case tKind parent of
         TKDir -> L.last $ pFilePath $ tPath $ parent
         TKOrgNode -> tTitle parent
+        _ → "<unknown>"
       combinedTitle = if (not $ T.null $ tTitle parent)
                       then if (not $ T.null $ tTitle child)
                            then (tTitle parent `T.append` "/"
@@ -328,9 +337,26 @@ compressTree input =
   case tChildren input of
     [] -> input
     [child] -> compressTree (mergeEntries input child)
-    otherwise -> input {
+    _ -> input {
       tChildren = map compressTree (tChildren input) }
 
+{-loadRepoRoot ∷ (MonadGit r m, MonadLogger m, MonadCatch m,
+                MonadMask m, MonadIO m, MonadBaseControl IO m) ⇒ RepoRef → Text → m (Maybe DocTreeEntry) -}
+loadRepoRoot ∷ (MonadLogger m,
+                MonadMask m,
+                MonadIO m,
+                MonadBaseControl IO m) ⇒ RepoRef → Text → m (Maybe DocTreeEntry)
+loadRepoRoot repo sha = do
+  let rPath = repoRefPath repo
+  ret ← runStdoutLoggingT $ withRepository LG2.lgFactoryLogger rPath $ do
+    oid ← parseOid sha
+    obj ← lookupObject oid
+    case obj of
+      CommitObj commit → do
+        doc ← loadRepoTree commit
+        return (Just doc)
+      _ → return Nothing
+  return ret
 
 loadRepoTree :: (MonadGit r m, MonadLogger m) => Commit r -> m DocTreeEntry
 loadRepoTree commit = do
@@ -348,3 +374,30 @@ loadRepoTree commit = do
       finalTree = foldl' updateTree root $ map makePath contents
       -- err: contents is [(TreeFilePath, OM.OrgDoc)], not [(Text,...)]
   return $ compressTree finalTree
+
+getHeadSha ∷ RepoRef → IO (String)
+getHeadSha ref = do
+  let rPath = repoRefPath ref
+  headSHA <- runStdoutLoggingT $ withRepository LG2.lgFactoryLogger rPath $ do
+    rref <- resolveReference "refs/heads/master"
+    let refName = maybe "(not found)" show rref
+    $(logDebug) $ "getHeadSHA: HEAD shows up as " ++ (pack $ show refName)
+    return refName
+  return headSHA
+  
+--
+-- |Get child references, up to 'max', of 'commit'.  Each is a pair
+-- (sha, msg, date)
+--
+refChildren :: (MonadGit r m) => Int -> Commit r -> m [(String, String, String)]
+refChildren 0 _ = return []
+refChildren mx commit = do
+  parents <- lookupCommitParents commit
+  children <- mapM (refChildren (mx-1)) parents
+  let timestamp = formatTime defaultTimeLocale "%m/%d" $
+                  signatureWhen $ commitCommitter commit
+  let current = (T.unpack $ renderObjOid $ commitOid commit,
+                 T.unpack $ commitLog commit,
+                 timestamp)
+  return $ take mx $ current:(concat children)
+

@@ -24,8 +24,8 @@ library
                      Handler.Home
                      Handler.DocTree
                      Handler.Scratch
-                     Repo.OrgRepo
-                     Repo.GitUtils
+                     Manip.Repo.OrgRepo
+                     Manip.Repo.GitUtils
                      Render.Node
                      SharedTypes
 

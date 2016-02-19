@@ -1,4 +1,4 @@
-module Repo.GitUtils where
+module Manip.Repo.GitUtils where
 import Git
 import Data.Text
 import Import as P

@@ -1,44 +1,29 @@
 module Handler.DocTree where
 
 import Import
-import Yesod.Form.Bootstrap3 (BootstrapFormLayout (..), renderBootstrap3,
-                              withSmallInput)
+--import Yesod.Form.Bootstrap3 (BootstrapFormLayout (..), renderBootstrap3,
+--                              withSmallInput)
 import Data.Char (isSpace)
 import Data.OrgMode
 --import Data.Text.Encoding (encodeUtf8)
-import Data.Time.Format
-import Data.Time.Locale.Compat
-import Data.Time.LocalTime
-import Control.Logging
+--import Data.Time.Format
+--import Data.Time.Locale.Compat
+--import Data.Time.LocalTime
+--import Control.Logging
 import Control.Monad.Logger
 import Git
 import Text.Blaze
-import Text.Cassius
+--import Text.Cassius
 import Text.Hamlet
 import Text.Julius
+import qualified Data.HashMap.Strict as HM
 import qualified Control.Monad as CM
 import qualified Data.Text as T
 import qualified Data.List as L
 import qualified Prelude as P
 import qualified Git.Libgit2 as LG2
-import qualified Repo.OrgRepo as OR
+import qualified Manip.Repo.OrgRepo as OR
 
-
---
--- |Get child references, up to 'max', of 'commit'.  Each is a pair
--- (sha, msg, date)
---
-refChildren :: (MonadGit r m) => Int -> Commit r -> m [(String, String, String)]
-refChildren max commit = do
-  parents <- lookupCommitParents commit
-  children <- mapM (refChildren (max-1)) parents
-  let timestamp = formatTime defaultTimeLocale "%m/%d" $
-                  signatureWhen $ commitCommitter commit
-  let current = (T.unpack $ renderObjOid $ commitOid commit,
-                 T.unpack $ commitLog commit,
-                 timestamp)
-  return $ take max $ current:(concat children)
-refChildren 0 commit = return []
 
 --
 -- |Redirect to '/doctree/HEAD's SHA/'
@@ -46,13 +31,7 @@ refChildren 0 commit = return []
 getHeadR :: Handler Html
 getHeadR = do
   app <- getYesod
-  let rPath = repoRefPath $ appRepo app
-  headSHA <- runStdoutLoggingT $ withRepository LG2.lgFactoryLogger rPath $ do
-    ref <- resolveReference "refs/heads/master"
-    let refName = maybe "(not found)" show ref
-    $(logDebug) $ "getHeadR: HEAD shows up as " ++ (pack $ show refName)
-    return refName
-
+  headSHA ← liftIO $ OR.getHeadSha (appRepo app)
   redirect (PathTreeR (T.pack headSHA) [])
 
 trim :: String -> String
@@ -60,12 +39,17 @@ trim = f . f
    where f = reverse . dropWhile isSpace
 
 getXhrPathTreeR :: Text -> Texts -> Handler TypedContent
-getXhrPathTreeR sha path = selectRep $ do
+getXhrPathTreeR sha _ = selectRep $ do
   provideRep $ do
     app <- getYesod
-    lineNr <- lookupGetParam "line"
-    let line = maybe "no line number" (\n -> "line #" ++ (show n)) lineNr
-    let rPath = repoRefPath $ appRepo app
+--    lineNr <- lookupGetParam "line"
+--    let line = maybe "no line number" (\n -> "line #" ++ (show n)) lineNr
+--    let rPath = repoRefPath $ appRepo app
+    mObj ← OR.loadRepoRoot (appRepo app) sha
+    return $ case mObj of
+      Just doc → toJSON doc
+      Nothing → toJSON (Object HM.empty)
+{-      
     -- TODO: handle an exception here for a failed parseOid/lookupObject
     (children, obj) <- runStdoutLoggingT $
                         withRepository LG2.lgFactoryLogger rPath $ do
@@ -84,7 +68,7 @@ getXhrPathTreeR sha path = selectRep $ do
                 return ([], object [])
     -- Note: theme is at https://polymerthemes.com/ice/
     let fullPath = T.intercalate "/" path
-    return obj
+    return obj -}
 
 {-
 eatAndFail :: (CE.Exception e) => e
@@ -114,14 +98,15 @@ inRepo sha action = do
       _ -> return Nothing
 
 
-mfilter pred r@(Just a) = if pred a then r else Nothing
-mfilter pred Nothing = Nothing
+mfilter :: (t -> Bool) -> Maybe t -> Maybe t
+mfilter pre r@(Just a) = if pre a then r else Nothing
+mfilter _ Nothing = Nothing
 
 getDocR :: Text -> Texts -> Handler Html
 getDocR sha path = do
   rawNodePath <- lookupGetParam "path"
   let nodePath = maybe [] (
-        \n -> map (P.floor . P.read . T.unpack) $
+        \n -> map (P.floor . ( P.read ∷ String → Double) . T.unpack) $
               T.splitOn "," n) $ mfilter (
         \l -> T.length l > 0) rawNodePath
   docText <- inRepo sha (OR.getDoc $ encodeUtf8 $T.intercalate "/" path)
@@ -129,18 +114,18 @@ getDocR sha path = do
       -- This is a lens.
       isChildNode (ChildNode nd) = Just nd
       isChildNode _ = Nothing
-      mkMaybe pred val = if pred then Just val else Nothing
+      mkMaybe pre val = if pre then Just val else Nothing
       getnth n list = mkMaybe (n >= 0 && length list > n) (
         P.head $ P.drop n list)
       traversePath :: [Int] -> Node -> Maybe Node
-      traversePath (p:ps) node =
-        let children = nChildren node
-            index = p-1
-            childNodes = mapMaybe isChildNode children
-        in CM.join $ traversePath <$> (pure ps) <*> (getnth index childNodes)
+      traversePath [] node = Just node
       traversePath [p] node =
         getnth (p-1) $ mapMaybe isChildNode (nChildren node)
-      traversePath [] node = Just node
+      traversePath (p:ps) node =
+        let children = nChildren node
+            idx = p-1
+            childNodes = mapMaybe isChildNode children
+        in CM.join $ traversePath <$> (pure ps) <*> (getnth idx childNodes)
       docNodes = odNodes <$> doc
       fakeRoot children = Node 0 Nothing [] (map ChildNode children) "" (
         TextLine 0 "" Nothing)
@@ -164,11 +149,11 @@ getDocR sha path = do
 getPathTreeR :: Text -> Texts -> Handler Html
 getPathTreeR sha path = do
   app <- getYesod
-  lineNr <- lookupGetParam "line"
-  let line = maybe "no line number" (\n -> "line #" ++ (show n)) lineNr
+--  lineNr <- lookupGetParam "line"
+--  let line = maybe "no line number" (\n -> "line #" ++ (show n)) lineNr
   let rPath = repoRefPath $ appRepo app
   -- TODO: handle an exception here for a failed parseOid/lookupObject
-  (children, docs, commitMsg) <- runStdoutLoggingT $
+  (children, _, commitMsg) <- runStdoutLoggingT $
                       withRepository LG2.lgFactoryLogger rPath $ do
     $(logDebug) "getPathTreeR"
     $(logDebug) $ "Working tree: " ++ (pack $ show rPath)
@@ -179,7 +164,7 @@ getPathTreeR sha path = do
       CommitObj commit -> do
         $(logDebug) $ "  Lookup successful.  Got commit."
         docs <- OR.loadRepo commit
-        children <- refChildren 30 commit
+        children <- OR.refChildren 30 commit
         return (children, docs, T.unpack $ commitLog commit)
       _ -> do $(logDebug) $ "  Exists but was not a commit."
               return ([], [], "(not a commit)")

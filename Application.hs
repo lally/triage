@@ -12,14 +12,14 @@ module Application
     , db
     ) where
 
-import Control.Logging
+-- import Control.Logging
 import Control.Monad.Logger
   --(liftLoc, runStdoutLoggingT,  runLoggingT, MonadLogger(..), MonadLoggerIO(..), LoggingT(..))
-import qualified Data.Conduit.List as CL
+-- import qualified Data.Conduit.List as CL
 -- import Data.List (intercalate)
 -- import Data.ByteString.Char8 (unpack)
-import qualified Data.Text.Encoding as DTE
-import qualified Data.Text as DT
+--import qualified Data.Text.Encoding as DTE
+--import qualified Data.Text as DT
 
 import Database.Persist.Sqlite              (createSqlitePool, runSqlPool,
                                              sqlDatabase, sqlPoolSize)
@@ -33,10 +33,10 @@ import Network.Wai.Middleware.RequestLogger (Destination (Logger),
                                              IPAddrSource (..),
                                              OutputFormat (..), destination,
                                              mkRequestLogger, outputFormat)
-import System.Log.FastLogger                (defaultBufSize, newStdoutLoggerSet,
-                                             toLogStr)
+import System.Log.FastLogger                (defaultBufSize, newStdoutLoggerSet)
+                                             --toLogStr)
 
-import Repo.OrgRepo
+--import Manip.Repo.OrgRepo
 import Git
 import Git.Libgit2
 -- Import all relevant handler modules here.
