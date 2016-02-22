@@ -10,9 +10,10 @@ import Yesod.Auth.Message   (AuthMessage (InvalidLogin))
 import Yesod.Default.Util   (addStaticContentExternal)
 import Yesod.Core.Types     (Logger)
 import Yesod.Fay
-import Control.Logging
+--import Control.Logging
 import Control.Monad.Logger
 
+import qualified Data.Text as T
 import qualified Git.Libgit2 as LG2
 
 import Fay.Convert (readFromFay)
@@ -75,7 +76,7 @@ instance Yesod App where
         "config/client_session_key.aes"
 
     defaultLayout widget = do
-        master <- getYesod
+--        master <- getYesod
         mmsg <- getMessage
 
         -- We break up the default layout into two components:
@@ -178,7 +179,7 @@ instance YesodFay App where
                     ref ← resolveReference ("refs/heads/" ++ name)
                     let refName = maybe "(not found)" show ref
                     return refName
-              render r "headSHA" -- guaranteed to be random, see http://xkcd.com/221/
+              render r (T.pack headSHA) -- guaranteed to be random, see http://xkcd.com/221/
             Nothing -> invalidArgs ["Invalid command"]
 
     fayRoute = FaySiteR

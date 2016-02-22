@@ -4,8 +4,8 @@ import Import
 import Yesod.Form.Bootstrap3 (BootstrapFormLayout (..), renderBootstrap3,
                               withSmallInput)
 
-import Control.Logging
-import Control.Monad.Logger
+--import Control.Logging
+--import Control.Monad.Logger
 import Language.Haskell.TH
 
 -- This is a handler function for the GET request method on the HomeR

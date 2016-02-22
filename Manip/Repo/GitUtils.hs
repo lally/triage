@@ -6,7 +6,7 @@ import Import as P
 -- if it's a branch:sha, or a symbolic name like HEAD (default branch
 -- can be given if not master).
 resolveReferenceDwim :: (MonadGit r m) => Text -> (Maybe Text) -> m (Maybe (RefTarget r))
-resolveReferenceDwim reference defaultBranch = undefined
+resolveReferenceDwim _ _ = fail "resolveReferenceDwim unimplemented." -- undefined
   
 {-  trySha <- resolveReverence reference
   if isJust trySha

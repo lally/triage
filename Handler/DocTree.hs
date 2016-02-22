@@ -46,9 +46,10 @@ getXhrPathTreeR sha _ = selectRep $ do
 --    let line = maybe "no line number" (\n -> "line #" ++ (show n)) lineNr
 --    let rPath = repoRefPath $ appRepo app
     mObj ← OR.loadRepoRoot (appRepo app) sha
-    return $ case mObj of
+    return $ maybe (Object HM.empty) toJSON mObj
+{--    return $ case mObj of
       Just doc → toJSON doc
-      Nothing → toJSON (Object HM.empty)
+      Nothing → toJSON  -}
 {-      
     -- TODO: handle an exception here for a failed parseOid/lookupObject
     (children, obj) <- runStdoutLoggingT $

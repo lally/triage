@@ -96,6 +96,7 @@ library
                  , tagged
                  , org-issue-sync
                  , blaze-markup
+                 , blaze-html
                  , time-locale-compat
                  , fay
                  , fay-dom

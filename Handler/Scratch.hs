@@ -1,9 +1,9 @@
 module Handler.Scratch where
 import Import
-import Control.Logging
-import Control.Monad.Logger
+--import Control.Logging
+--import Control.Monad.Logger
 import Language.Haskell.TH
-import Text.Hamlet
+--import Text.Hamlet
 
 getScratchR ∷ Handler Html
 getScratchR = do

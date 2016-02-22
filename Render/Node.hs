@@ -3,6 +3,7 @@ module Render.Node where
 import Import
 import Data.OrgMode
 import Text.Hamlet
+--import Text.Blaze.Html
 
 -- returns ([child nodes], [other children])
 splitChildren :: Node -> ([NodeChild], [NodeChild])
@@ -14,15 +15,17 @@ splitChildren nd =
       categorizeNd o (ns, os) = (ns, os ++ [o])
   in Import.foldr categorizeNd ([], []) $ nChildren nd
 
+renderChild :: NodeChild -> t -> Html
 renderChild (ChildText line) = [hamlet| #{tlText line} <br />|]
 renderChild (ChildDrawer drawer) = [hamlet| #{drName drawer} <br />|]
-renderChild (ChildBabel babel) = [hamlet| |]
-renderChild (ChildTable table) = [hamlet| |]
+renderChild (ChildBabel _) = [hamlet| |]
+renderChild (ChildTable _) = [hamlet| |]
 -- This shouldn't get invoked!
-renderChild (ChildNode _) = undefined
+renderChild (ChildNode _) = fail "no ChildNode should be here!"
 
 -- Reminder: MonadGit r m -> r=repo m=outer monad.  The outer monad can
 -- be IO, but also some logger monad.
+--renderNode :: (Num a, Eq a) => NodeChild -> a -> HtmlUrl
 renderNode (ChildNode nc) 0 = do
   if (nTopic nc /= "ISSUE EVENTS")
     then do [hamlet|
@@ -48,12 +51,12 @@ renderNode (ChildNode nc) n = do
              |]
     else do [hamlet| |]
 
-renderNode (ChildDrawer _ ) n = do [hamlet| |]
-renderNode (ChildBabel (Babel lines) ) n = do
+renderNode (ChildDrawer _ ) _ = do [hamlet| |]
+renderNode (ChildBabel (Babel lines) ) _ = do
   [hamlet|
    <prism-js language="bash">
      $forall (TextLine _ t _) <- lines
        #{t}
    |]
 
-renderNode child n = do [hamlet| |]
+renderNode _ _ = do [hamlet| |]
