@@ -2,6 +2,11 @@ flags:
   triage:
     library-only: false
     dev: false
+
+nix:
+  enable: true
+  packages: [zlib, git, openssh, haskell.packages.lts-3_13.happy, pcre, glpk, openssl, icu]
+
 packages:
 - '.'
 - ../orgmode
