@@ -19,7 +19,7 @@ import qualified Git.Libgit2 as LG2
 import Fay.Convert (readFromFay)
 
 import Git
-import Git.Libgit2
+--import Git.Libgit2
 
 import qualified Yesod.Core.Unsafe as Unsafe
 
@@ -177,9 +177,17 @@ instance YesodFay App where
               let rPath = repoRefPath $ appRepo app
               headSHA ← runStdoutLoggingT $ withRepository LG2.lgFactoryLogger rPath $ do
                     ref ← resolveReference ("refs/heads/" ++ name)
-                    let refName = maybe "(not found)" show ref
+                    let refName = maybe ("('" ++ (T.unpack name) ++ "' not found)") show ref
                     return refName
-              render r (T.pack headSHA) -- guaranteed to be random, see http://xkcd.com/221/
+              render r (T.pack headSHA)
+            Just (Head r) → do
+              app ← getYesod
+              let rPath = repoRefPath $ appRepo app
+              headSHA ← runStdoutLoggingT $ withRepository LG2.lgFactoryLogger rPath $ do
+                    ref ← resolveReference ("refs/heads/master")
+                    let refName = maybe ("('master' not found)") show ref
+                    return refName
+              render r (T.pack headSHA)
             Nothing -> invalidArgs ["Invalid command"]
 
     fayRoute = FaySiteR

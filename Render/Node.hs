@@ -2,7 +2,7 @@ module Render.Node where
 
 import Import
 import Data.OrgMode
-import Text.Hamlet
+--import Text.Hamlet
 --import Text.Blaze.Html
 
 -- returns ([child nodes], [other children])
@@ -52,10 +52,10 @@ renderNode (ChildNode nc) n = do
     else do [hamlet| |]
 
 renderNode (ChildDrawer _ ) _ = do [hamlet| |]
-renderNode (ChildBabel (Babel lines) ) _ = do
+renderNode (ChildBabel (Babel tlines) ) _ = do
   [hamlet|
    <prism-js language="bash">
-     $forall (TextLine _ t _) <- lines
+     $forall (TextLine _ t _) <- tlines
        #{t}
    |]
 

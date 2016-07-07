@@ -104,7 +104,7 @@ instance ToJSON DocTreeEntry where
   toJSON ent = object (
                [ "name" .= tTitle ent
                , "path" .= tPath ent
-               , "value" .= tData ent
+               , "data" .= tData ent
                , "children" .= tChildren ent
                , "kind" .= tKind ent
                , "tags" .= tTags ent

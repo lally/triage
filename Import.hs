@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, OverloadedStrings #-}
 module Import
     ( module Import
     ) where
@@ -6,6 +6,7 @@ module Import
 import Foundation            as Import
 import Import.NoFoundation   as Import
 
+import Fay
 import Yesod.Fay
 import Language.Haskell.TH.Syntax (Exp)
 -- import System.Process (readProcess)
@@ -19,9 +20,12 @@ development = False
 development = True
 #endif
 
+modConfig ∷ Config → Config
+modConfig c = c { configSourceMap = True, configPrettyPrint = True }
+
 fayFile' :: Exp -> FayFile
 fayFile' staticR moduleName
-    | development = fayFileReload settings
+    | development = fayFileReloadWithConfig 'modConfig settings
     | otherwise   = fayFileProd settings
   where
     settings =
@@ -30,5 +34,6 @@ fayFile' staticR moduleName
         { yfsSeparateRuntime = Just ("static", staticR)
         -- , yfsPostProcess = readProcess "java" ["-jar", "closure-compiler.jar"]
         , yfsPackages = (yfsPackages defaults) ++ ["fay-jquery","fay-text"]
+        , yfsTypecheckDevel = True
         , yfsExternal = Just ("static", staticR)
         }

@@ -3,6 +3,7 @@ $newline never
   <head>
     <meta charset="utf-8">
     <script src="/static/bower_components/webcomponentsjs/webcomponents-lite.js"></script>
+    <script src="/static/jquery-1.10.2.min.js"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=PT+Sans+Narrow:400,700" type="text/css">
     <link rel="import" href="/static/bower_components/iron-flex-layout/iron-flex-layout.html">
     <link rel="import" href="/static/theme/theme.html">
@@ -11,5 +12,6 @@ $newline never
 
     <script>
       document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/,'js');
+
   <body .fullbleed .layout .vertical unresolved>
     ^{pageBody pc}

@@ -6,12 +6,14 @@ module SharedTypes where
 import Prelude
 import Fay.Yesod
 import Data.Data
-import Data.Text
+--import Data.Text
 #ifdef FAY
 import FFI
+import Fay.Text
 #else
-import Fay
-import Fay.FFI
+import Data.Text
+import Fay()
+import Fay.FFI()
 #endif
 {-
 data DrawableNode = DrawableNode { dnTitle ∷ String
@@ -25,5 +27,6 @@ data NodeTree = NodeLeaf DrawableNode
                 deriving (Read, Typeable, Data)
 -}
 data Command = LookupRef Text (Returns Text)
+               | Head (Returns Text)
 --             | LoadGraph Text (Returns NodeTree)
     deriving (Read, Typeable, Data)
